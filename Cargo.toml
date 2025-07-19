@@ -1,13 +1,13 @@
 [package]
-name = "debian-analyzer"
-version = "0.159.0"
+name = "debian-workbench"
+version = "0.1.0"
 authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
-description = "Debian analyzer"
-repository = "https://github.com/jelmer/debian-analyzer"
-homepage = "https://github.com/jelmer/debian-analyzer"
-documentation = "https://docs.rs/debian-analyzer"
+description = "Workbench for making changes to Debian packages"
+repository = "https://github.com/jelmer/debian-workbench"
+homepage = "https://github.com/jelmer/debian-workbench"
+documentation = "https://docs.rs/debian-workbench"
 
 [dependencies]
 pyo3 = { version = ">=0.25,<0.26", features = ["serde", "chrono"] }

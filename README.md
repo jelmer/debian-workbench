@@ -1,5 +1,5 @@
-debian-analyzer
-===============
+debian-workbench
+================
 
 This rust crate provides a set of tools to analyze Debian packages and
 make changes to them.
