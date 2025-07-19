@@ -600,7 +600,7 @@ fn find_template_path(path: &Path) -> Option<PathBuf> {
 ///
 /// ```rust
 /// use std::path::Path;
-/// use debian_analyzer::control::TemplatedControlEditor;
+/// use debian_workbench::control::TemplatedControlEditor;
 /// let td = tempfile::tempdir().unwrap();
 /// let mut editor = TemplatedControlEditor::create(td.path().join("control")).unwrap();
 /// editor.add_source("foo").set_architecture(Some("all"));

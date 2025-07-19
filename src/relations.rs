@@ -126,7 +126,7 @@ pub fn ensure_relation(rels: &mut Relations, newrel: Entry) {
 /// # Examples
 /// ```rust
 /// use debian_control::lossless::relations::Relations;
-/// use debian_analyzer::relations::ensure_minimum_version;
+/// use debian_workbench::relations::ensure_minimum_version;
 /// let mut rels: Relations = "".parse().unwrap();
 /// ensure_minimum_version(&mut rels, "foo", &"1.0".parse().unwrap());
 /// assert_eq!("foo (>= 1.0)", rels.to_string());
@@ -224,7 +224,7 @@ pub fn ensure_minimum_version(
 /// # Examples
 /// ```rust
 /// use debian_control::lossless::relations::Relations;
-/// use debian_analyzer::relations::ensure_exact_version;
+/// use debian_workbench::relations::ensure_exact_version;
 /// let mut rels: Relations = "".parse().unwrap();
 /// ensure_exact_version(&mut rels, "foo", &"1.0".parse().unwrap(), None);
 /// assert_eq!("foo (= 1.0)", rels.to_string());
@@ -287,7 +287,7 @@ pub fn ensure_exact_version(
 /// # Examples
 /// ```rust
 /// use debian_control::lossless::relations::Relations;
-/// use debian_analyzer::relations::ensure_some_version;
+/// use debian_workbench::relations::ensure_some_version;
 ///
 /// let mut rels: Relations = "".parse().unwrap();
 /// ensure_some_version(&mut rels, "foo");

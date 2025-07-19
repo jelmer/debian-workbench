@@ -3,10 +3,10 @@ use breezyshim::error::Error;
 use breezyshim::prelude::*;
 use breezyshim::workingtree;
 use clap::Parser;
-use debian_analyzer::publish::{create_vcs_url, update_official_vcs};
+use debian_workbench::publish::{create_vcs_url, update_official_vcs};
 use debian_changelog::get_maintainer;
 
-use debian_analyzer::get_committer;
+use debian_workbench::get_committer;
 
 use std::io::Write as _;
 
