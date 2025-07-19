@@ -5,8 +5,8 @@ authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
 description = "Debian analyzer"
-repository = "https://salsa.debian.org/jelmer/lintian-brush.git"
-homepage = "https://salsa.debian.org/jelmer/lintian-brush"
+repository = "https://github.com/jelmer/debian-analyzer"
+homepage = "https://github.com/jelmer/debian-analyzer"
 documentation = "https://docs.rs/debian-analyzer"
 
 [dependencies]
