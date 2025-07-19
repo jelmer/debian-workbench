@@ -7,6 +7,8 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use toml_edit::{value, DocumentMut, Table};
 
+pub use toml_edit;
+
 /// The default maintainer for Rust packages.
 pub const DEFAULT_MAINTAINER: &str =
     "Debian Rust Maintainers <pkg-rust-maintainers@alioth-lists.debian.net>";
