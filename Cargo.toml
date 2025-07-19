@@ -1,6 +1,6 @@
 [package]
 name = "debian-analyzer"
-version = "0.158.28"
+version = "0.159.0"
 authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
@@ -15,7 +15,7 @@ debversion = { version = ">=0.4.0", features = ["serde", "python-debian"] }
 log = "0.4"
 lazy-regex = ">=2"
 serde = { version = "1", features = ["derive"] }
-breezyshim = { git = "https://github.com/breezy-team/breezyshim", features = ["debian", "dirty-tracker"] }
+breezyshim = { version = "0.6", features = ["debian", "dirty-tracker"] }
 configparser = "3"
 clap = { version = "4,<5", features = ["derive", "env", "suggestions", "cargo", "string"], optional = true }
 env_logger = { version = ">=0.10", optional = true }
