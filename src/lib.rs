@@ -3,12 +3,13 @@
 use breezyshim::branch::Branch;
 use breezyshim::dirty_tracker::DirtyTreeTracker;
 use breezyshim::error::Error;
-use breezyshim::repository::PyRepository;
 use breezyshim::tree::{MutableTree, PyTree, Tree, TreeChange, WorkingTree};
 use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
 #[cfg(feature = "python")]
 use pyo3::prelude::*;
+#[cfg(feature = "python")]
+use breezyshim::repository::PyRepository;
 
 pub mod abstract_control;
 pub mod benfile;
