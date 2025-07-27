@@ -39,9 +39,10 @@ fn main() {
         let key = quote::format_ident!("{}_versions", key);
         use std::io::Write;
 
+        let doc_string = format!("A map of package names to their versions for the key: {}", key);
         let code = quote! {
             lazy_static::lazy_static! {
-                #[doc = "A map of package names to their versions for the key: " #key]
+                #[doc = #doc_string]
                 #[allow(non_upper_case_globals)]
                 pub static ref #key: std::collections::HashMap<&'static str, debversion::Version> = {
                     let mut map = std::collections::HashMap::new();

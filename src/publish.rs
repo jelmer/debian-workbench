@@ -7,7 +7,6 @@ use debian_control::control::Source;
 use breezyshim::branch::Branch;
 use breezyshim::error::Error as BrzError;
 use breezyshim::forge::create_project;
-use breezyshim::tree::WorkingTree;
 use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::check_clean_tree;
 use debian_control::vcs::ParsedVcs;

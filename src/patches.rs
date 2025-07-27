@@ -3,7 +3,7 @@ use breezyshim::delta::filter_excluded;
 use breezyshim::error::Error as BrzError;
 use breezyshim::patches::AppliedPatches;
 use breezyshim::prelude::*;
-use breezyshim::tree::{MutableTree, PyTree, Tree};
+use breezyshim::tree::{PyTree, Tree};
 use breezyshim::workingtree::{PyWorkingTree, WorkingTree};
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
 use breezyshim::RevisionId;

@@ -152,7 +152,10 @@ pub fn guess_update_changelog_from_tree(
 
 fn greedy_revisions(graph: &Graph, revid: &RevisionId, length: usize) -> (Vec<RevisionId>, bool) {
     let mut ret = vec![];
-    let mut it = graph.iter_lefthand_ancestry(revid, None);
+    let mut it = match graph.iter_lefthand_ancestry(revid, None) {
+        Ok(iter) => iter,
+        Err(_) => return (ret, true),
+    };
     while ret.len() < length {
         ret.push(match it.next() {
             None => break,
@@ -163,6 +166,10 @@ fn greedy_revisions(graph: &Graph, revid: &RevisionId, length: usize) -> (Vec<Re
                 }
                 // Shallow history
                 return (ret, true);
+            }
+            Some(Err(e)) => {
+                // Re-raise other errors
+                panic!("Error iterating through ancestry: {:?}", e);
             }
         });
     }
