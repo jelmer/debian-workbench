@@ -41,7 +41,7 @@ fn main() {
 
         let code = quote! {
             lazy_static::lazy_static! {
-                /// A map of key package versions for the package `#key`.
+                #[doc = "A map of package names to their versions for the key: " #key]
                 #[allow(non_upper_case_globals)]
                 pub static ref #key: std::collections::HashMap<&'static str, debversion::Version> = {
                     let mut map = std::collections::HashMap::new();
