@@ -39,7 +39,10 @@ fn main() {
         let key = quote::format_ident!("{}_versions", key);
         use std::io::Write;
 
-        let doc_string = format!("A map of package names to their versions for the key: {}", key);
+        let doc_string = format!(
+            "A map of package names to their versions for the key: {}",
+            key
+        );
         let code = quote! {
             lazy_static::lazy_static! {
                 #[doc = #doc_string]

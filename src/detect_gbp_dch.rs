@@ -1,6 +1,6 @@
 //! Detect whether the changelog should be updated.
 use breezyshim::error::Error;
-use breezyshim::graph::{Error as GraphError, Graph};
+use breezyshim::graph::Graph;
 use breezyshim::prelude::*;
 use breezyshim::revisionid::RevisionId;
 use debian_changelog::{ChangeLog, Entry as ChangeLogEntry};
@@ -160,7 +160,7 @@ fn greedy_revisions(graph: &Graph, revid: &RevisionId, length: usize) -> (Vec<Re
         ret.push(match it.next() {
             None => break,
             Some(Ok(rev)) => rev,
-            Some(Err(GraphError::RevisionNotPresent(_))) => {
+            Some(Err(Error::RevisionNotPresent(_))) => {
                 if !ret.is_empty() {
                     ret.pop();
                 }
