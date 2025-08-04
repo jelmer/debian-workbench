@@ -3,10 +3,13 @@
 /// The path to the Lintian data directory
 pub const LINTIAN_DATA_PATH: &str = "/usr/share/lintian/data";
 
-/// The path to the Lintian tags file
-pub const RELEASE_DATES_PATH: &str = "/usr/share/lintian/data/debian-policy/release-dates.json";
+/// The path to the Lintian release dates file (old name)
+pub const RELEASE_DATES_PATH_OLD: &str = "/usr/share/lintian/data/debian-policy/release-dates.json";
 
-#[derive(Debug, Clone, serde::Deserialize)]
+/// The path to the Lintian release dates file (new name)
+pub const RELEASE_DATES_PATH_NEW: &str = "/usr/share/lintian/data/debian-policy/releases.json";
+
+#[derive(Debug, Clone)]
 /// A release of the Debian Policy
 pub struct PolicyRelease {
     /// The version of the release
@@ -30,11 +33,66 @@ struct Preamble {
     pub title: String,
 }
 
+// Internal struct for deserializing releases.json (new format with floats)
+#[derive(Debug, Clone, serde::Deserialize)]
+struct PolicyReleaseNewFormat {
+    pub version: StandardsVersion,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub closes: Vec<f64>,
+    pub epoch: Option<i32>,
+    pub author: Option<String>,
+    pub changes: Vec<String>,
+}
+
+// Internal struct for deserializing release-dates.json (old format with ints)
+#[derive(Debug, Clone, serde::Deserialize)]
+struct PolicyReleaseOldFormat {
+    pub version: StandardsVersion,
+    pub timestamp: chrono::DateTime<chrono::Utc>,
+    pub closes: Vec<i32>,
+    pub epoch: Option<i32>,
+    pub author: Option<String>,
+    pub changes: Vec<String>,
+}
+
+impl From<PolicyReleaseNewFormat> for PolicyRelease {
+    fn from(r: PolicyReleaseNewFormat) -> Self {
+        PolicyRelease {
+            version: r.version,
+            timestamp: r.timestamp,
+            closes: r.closes.into_iter().map(|c| c as i32).collect(),
+            epoch: r.epoch,
+            author: r.author,
+            changes: r.changes,
+        }
+    }
+}
+
+impl From<PolicyReleaseOldFormat> for PolicyRelease {
+    fn from(r: PolicyReleaseOldFormat) -> Self {
+        PolicyRelease {
+            version: r.version,
+            timestamp: r.timestamp,
+            closes: r.closes,
+            epoch: r.epoch,
+            author: r.author,
+            changes: r.changes,
+        }
+    }
+}
+
 #[derive(Debug, Clone, serde::Deserialize)]
 #[allow(dead_code)]
-struct PolicyReleases {
+struct PolicyReleasesNewFormat {
     pub preamble: Preamble,
-    pub releases: Vec<PolicyRelease>,
+    pub releases: Vec<PolicyReleaseNewFormat>,
+}
+
+#[derive(Debug, Clone, serde::Deserialize)]
+#[allow(dead_code)]
+struct PolicyReleasesOldFormat {
+    pub preamble: Preamble,
+    pub releases: Vec<PolicyReleaseOldFormat>,
 }
 
 #[derive(Debug, Clone)]
@@ -42,6 +100,11 @@ struct PolicyReleases {
 pub struct StandardsVersion(Vec<i32>);
 
 impl StandardsVersion {
+    /// Create a new StandardsVersion from major, minor, and patch numbers
+    pub fn new(major: i32, minor: i32, patch: i32) -> Self {
+        Self(vec![major, minor, patch])
+    }
+
     fn normalize(&self, n: usize) -> Self {
         let mut version = self.0.clone();
         version.resize(n, 0);
@@ -116,10 +179,43 @@ impl std::fmt::Display for StandardsVersion {
 
 /// Returns an iterator over all known standards versions
 pub fn iter_standards_versions() -> impl Iterator<Item = PolicyRelease> {
-    let data = std::fs::read(RELEASE_DATES_PATH).expect("Failed to read release dates");
-    let data: PolicyReleases =
-        serde_json::from_slice(&data).expect("Failed to parse release dates");
-    data.releases.into_iter()
+    iter_standards_versions_opt()
+        .expect("Failed to read release dates from either releases.json or release-dates.json")
+}
+
+/// Returns an iterator over all known standards versions
+/// Returns None if neither releases.json nor release-dates.json can be found
+pub fn iter_standards_versions_opt() -> Option<impl Iterator<Item = PolicyRelease>> {
+    // Try the new filename first, then fall back to the old one
+    if let Ok(data) = std::fs::read(RELEASE_DATES_PATH_NEW) {
+        // Try to parse as new format (releases.json)
+        if let Ok(parsed) = serde_json::from_slice::<PolicyReleasesNewFormat>(&data) {
+            return Some(
+                parsed
+                    .releases
+                    .into_iter()
+                    .map(|r| r.into())
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            );
+        }
+    }
+
+    // Fall back to old format (release-dates.json)
+    if let Ok(data) = std::fs::read(RELEASE_DATES_PATH_OLD) {
+        if let Ok(parsed) = serde_json::from_slice::<PolicyReleasesOldFormat>(&data) {
+            return Some(
+                parsed
+                    .releases
+                    .into_iter()
+                    .map(|r| r.into())
+                    .collect::<Vec<_>>()
+                    .into_iter(),
+            );
+        }
+    }
+
+    None
 }
 
 /// Returns the latest standards version
@@ -130,8 +226,18 @@ pub fn latest_standards_version() -> StandardsVersion {
         .version
 }
 
+/// Returns the latest standards version
+/// Returns None if release data files are not available
+pub fn latest_standards_version_opt() -> Option<StandardsVersion> {
+    iter_standards_versions_opt()
+        .and_then(|mut iter| iter.next())
+        .map(|release| release.version)
+}
+
 #[cfg(test)]
 mod tests {
+    use chrono::Datelike;
+
     #[test]
     fn test_standards_version() {
         let version: super::StandardsVersion = "4.2.0".parse().unwrap();
@@ -218,7 +324,50 @@ mod tests {
       }
    ]
 }"###;
-        let data: super::PolicyReleases = serde_json::from_str(input).unwrap();
+        let data: super::PolicyReleasesOldFormat = serde_json::from_str(input).unwrap();
         assert_eq!(data.releases.len(), 1);
+    }
+
+    #[test]
+    fn test_iter_standards_versions_opt() {
+        // This test verifies that we can read the policy release data
+        // In test environments, the files may not exist
+        let Some(iter) = super::iter_standards_versions_opt() else {
+            // Skip test if no files are available
+            return;
+        };
+
+        let versions: Vec<_> = iter.collect();
+
+        // Should have at least one version
+        assert!(!versions.is_empty());
+
+        // The latest version should be first
+        let latest = &versions[0];
+
+        // Verify the version has a proper format
+        assert!(!latest.version.to_string().is_empty());
+        assert!(latest.version.to_string().contains('.'));
+
+        // Verify other fields are populated
+        assert!(latest.timestamp.year() >= 2020);
+        assert!(!latest.changes.is_empty());
+    }
+
+    #[test]
+    fn test_latest_standards_version_opt() {
+        // Test that we can get the latest standards version
+        let Some(latest) = super::latest_standards_version_opt() else {
+            // Skip test if no files are available
+            return;
+        };
+
+        // Should have a valid version string
+        let version_str = latest.to_string();
+        assert!(!version_str.is_empty());
+        assert!(version_str.contains('.'));
+
+        // Should be at least 4.0.0 (Debian policy versions)
+        assert!(latest >= "4.0.0".parse::<super::StandardsVersion>().unwrap());
     }
 }
