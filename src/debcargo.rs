@@ -507,6 +507,16 @@ impl DebcargoSource<'_> {
             _ => self.set_extra_field(&format!("Vcs-{}", vcs_type), url),
         }
     }
+
+    /// Get a VCS URL using the appropriate method.
+    /// Uses native fields for Git and Browser, extra_lines for others.
+    pub fn get_vcs_url(&self, vcs_type: &str) -> Option<String> {
+        match vcs_type.to_lowercase().as_str() {
+            "git" => self.vcs_git(),
+            "browser" => self.vcs_browser(),
+            _ => self.get_extra_field(&format!("Vcs-{}", vcs_type)),
+        }
+    }
 }
 
 #[allow(dead_code)]
@@ -925,5 +935,50 @@ mod tests {
             source.get_extra_field("Vcs-Bzr"),
             Some("https://bzr.example.com/repo".to_string())
         );
+    }
+
+    #[test]
+    fn test_get_vcs_url() {
+        let mut editor = super::DebcargoEditor::new();
+        let mut source = editor.source();
+
+        // Set various VCS URLs
+        source.set_vcs_git("https://github.com/example/repo.git");
+        source.set_vcs_browser("https://github.com/example/repo");
+        source.set_extra_field("Vcs-Svn", "https://svn.example.com/repo");
+        source.set_extra_field("Vcs-Bzr", "https://bzr.example.com/repo");
+
+        // Test getting native Git field
+        assert_eq!(
+            source.get_vcs_url("Git"),
+            Some("https://github.com/example/repo.git".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("git"),
+            Some("https://github.com/example/repo.git".to_string())
+        );
+
+        // Test getting native Browser field
+        assert_eq!(
+            source.get_vcs_url("Browser"),
+            Some("https://github.com/example/repo".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("browser"),
+            Some("https://github.com/example/repo".to_string())
+        );
+
+        // Test getting non-native VCS types from extra_lines
+        assert_eq!(
+            source.get_vcs_url("Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("Bzr"),
+            Some("https://bzr.example.com/repo".to_string())
+        );
+
+        // Test getting non-existent VCS type
+        assert_eq!(source.get_vcs_url("Hg"), None);
     }
 }
