@@ -32,6 +32,9 @@ pub trait AbstractSource<'a> {
 
     /// Set the uploaders of the source package.
     fn set_uploaders(&mut self, uploaders: &[&str]);
+
+    /// Set the VCS URL for the source package.
+    fn set_vcs_url(&mut self, vcs_type: &str, url: &str);
 }
 
 /// An abstract binary package.
@@ -88,6 +91,11 @@ impl AbstractSource<'_> for PlainSource {
     fn set_uploaders(&mut self, uploaders: &[&str]) {
         (self as &mut debian_control::lossless::Source).set_uploaders(uploaders);
     }
+
+    fn set_vcs_url(&mut self, vcs_type: &str, url: &str) {
+        let field_name = format!("Vcs-{}", vcs_type);
+        self.as_mut_deb822().set(&field_name, url);
+    }
 }
 
 impl AbstractBinary for DebcargoBinary<'_> {
@@ -119,6 +127,10 @@ impl<'a> AbstractSource<'a> for DebcargoSource<'a> {
     fn set_uploaders(&mut self, uploaders: &[&str]) {
         (self as &mut crate::debcargo::DebcargoSource)
             .set_uploaders(uploaders.iter().map(|s| s.to_string()).collect::<Vec<_>>());
+    }
+
+    fn set_vcs_url(&mut self, vcs_type: &str, url: &str) {
+        (self as &mut crate::debcargo::DebcargoSource).set_vcs_url(vcs_type, url);
     }
 }
 
@@ -276,6 +288,102 @@ Build-Depends: libc6, libssl-dev
 Package: example
 Architecture: any
 Description: Example package
+"#
+        );
+    }
+
+    #[test]
+    fn test_abstract_source_set_vcs_url_plain() {
+        let td = tempfile::tempdir().unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        // Write dummy debian/control
+        tree.mkdir(Path::new("debian")).unwrap();
+        tree.put_file_bytes_non_atomic(
+            Path::new("debian/control"),
+            br#"Source: example
+Maintainer: Alice <alice@example.com>
+
+Package: example
+Architecture: any
+Description: Example package
+"#,
+        )
+        .unwrap();
+        tree.add(&[Path::new("debian/control")]).unwrap();
+
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let mut source = editor.source().unwrap();
+
+        // Test setting various VCS URLs
+        source.set_vcs_url("Git", "https://github.com/example/repo.git");
+        source.set_vcs_url("Browser", "https://github.com/example/repo");
+
+        std::mem::drop(source);
+        editor.commit();
+
+        let text = tree.get_file_text(Path::new("debian/control")).unwrap();
+        assert_eq!(
+            std::str::from_utf8(&text).unwrap(),
+            r#"Source: example
+Maintainer: Alice <alice@example.com>
+Vcs-Git: https://github.com/example/repo.git
+Vcs-Browser: https://github.com/example/repo
+
+Package: example
+Architecture: any
+Description: Example package
+"#
+        );
+    }
+
+    #[test]
+    fn test_abstract_source_set_vcs_url_debcargo() {
+        let td = tempfile::tempdir().unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        // Write dummy debcargo.toml
+        tree.mkdir(Path::new("debian")).unwrap();
+        std::fs::write(
+            td.path().join("debian/debcargo.toml"),
+            br#"maintainer = "Alice <alice@example.com>"
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            td.path().join("Cargo.toml"),
+            br#"[package]
+name = "example"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+
+        tree.add(&[(Path::new("debian")), (Path::new("debian/debcargo.toml"))])
+            .unwrap();
+
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let mut source = editor.source().unwrap();
+
+        // Test setting native VCS URLs
+        source.set_vcs_url("Git", "https://github.com/example/repo.git");
+        source.set_vcs_url("Browser", "https://github.com/example/repo");
+
+        // Test setting non-native VCS URL
+        source.set_vcs_url("Svn", "https://svn.example.com/repo");
+
+        std::mem::drop(source);
+        editor.commit();
+
+        // Read back the debcargo.toml to verify
+        let content = std::fs::read_to_string(td.path().join("debian/debcargo.toml")).unwrap();
+        assert_eq!(
+            content,
+            r#"maintainer = "Alice <alice@example.com>"
+
+[source]
+vcs_git = "https://github.com/example/repo.git"
+vcs_browser = "https://github.com/example/repo"
+extra_lines = ["Vcs-Svn: https://svn.example.com/repo"]
 "#
         );
     }

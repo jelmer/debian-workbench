@@ -208,6 +208,9 @@ pub struct DebcargoSource<'a> {
 impl DebcargoSource<'_> {
     /// Return the source section of the debcargo.toml file.
     pub fn toml_section_mut(&mut self) -> &mut Table {
+        if !self.main.debcargo.contains_key("source") {
+            self.main.debcargo["source"] = toml_edit::Item::Table(Table::new());
+        }
         self.main.debcargo["source"].as_table_mut().unwrap()
     }
 
@@ -400,6 +403,109 @@ impl DebcargoSource<'_> {
         }
         self.toml_section_mut()["uploaders"] = value(array);
         self
+    }
+
+    /// Get the extra_lines field as a vector of strings.
+    pub fn extra_lines(&self) -> Vec<String> {
+        self.main
+            .debcargo
+            .get("source")
+            .and_then(|s| s.get("extra_lines"))
+            .and_then(|x| x.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str())
+                    .map(|s| s.to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    /// Set the extra_lines field.
+    pub fn set_extra_lines(&mut self, lines: Vec<String>) -> &mut Self {
+        let mut array = toml_edit::Array::new();
+        for line in lines {
+            array.push(line);
+        }
+        self.toml_section_mut()["extra_lines"] = value(array);
+        self
+    }
+
+    /// Add a line to extra_lines if it doesn't already exist.
+    pub fn add_extra_line(&mut self, line: String) -> &mut Self {
+        let mut lines = self.extra_lines();
+        if !lines.contains(&line) {
+            lines.push(line);
+            self.set_extra_lines(lines);
+        }
+        self
+    }
+
+    /// Remove a line from extra_lines.
+    pub fn remove_extra_line(&mut self, line: &str) -> &mut Self {
+        let lines = self.extra_lines();
+        let filtered: Vec<String> = lines.into_iter().filter(|l| l != line).collect();
+        self.set_extra_lines(filtered);
+        self
+    }
+
+    /// Get a field value from extra_lines (for debian/control fields).
+    /// Looks for lines in the format "Field: value" and returns the value.
+    pub fn get_extra_field(&self, field_name: &str) -> Option<String> {
+        let prefix = format!("{}:", field_name);
+        self.extra_lines()
+            .iter()
+            .find(|line| line.starts_with(&prefix))
+            .map(|line| line[prefix.len()..].trim().to_string())
+    }
+
+    /// Set a field in extra_lines (for debian/control fields).
+    /// Updates existing field or adds new one if not present.
+    pub fn set_extra_field(&mut self, field_name: &str, value: &str) -> &mut Self {
+        let field_line = format!("{}: {}", field_name, value);
+        let prefix = format!("{}:", field_name);
+
+        let mut lines = self.extra_lines();
+        let mut found = false;
+
+        // Update existing field
+        for line in &mut lines {
+            if line.starts_with(&prefix) {
+                *line = field_line.clone();
+                found = true;
+                break;
+            }
+        }
+
+        // Add new field if not found
+        if !found {
+            lines.push(field_line);
+        }
+
+        self.set_extra_lines(lines);
+        self
+    }
+
+    /// Remove a field from extra_lines.
+    pub fn remove_extra_field(&mut self, field_name: &str) -> &mut Self {
+        let prefix = format!("{}:", field_name);
+        let lines = self.extra_lines();
+        let filtered: Vec<String> = lines
+            .into_iter()
+            .filter(|line| !line.starts_with(&prefix))
+            .collect();
+        self.set_extra_lines(filtered);
+        self
+    }
+
+    /// Set a VCS URL using the appropriate method.
+    /// Uses native fields for Git and Browser, extra_lines for others.
+    pub fn set_vcs_url(&mut self, vcs_type: &str, url: &str) -> &mut Self {
+        match vcs_type.to_lowercase().as_str() {
+            "git" => self.set_vcs_git(url),
+            "browser" => self.set_vcs_browser(url),
+            _ => self.set_extra_field(&format!("Vcs-{}", vcs_type), url),
+        }
     }
 }
 
@@ -640,5 +746,184 @@ mod tests {
         assert_eq!(editor.source().name(), None);
         assert_eq!(editor.source().uploaders(), None);
         assert_eq!(editor.source().homepage(), Some("https://example.com"));
+    }
+
+    #[test]
+    fn test_extra_lines_manipulation() {
+        let mut editor = super::DebcargoEditor::new();
+        let mut source = editor.source();
+
+        // Test initial state
+        assert_eq!(source.extra_lines(), Vec::<String>::new());
+
+        // Test set_extra_lines
+        source.set_extra_lines(vec![
+            "Vcs-Svn: https://svn.example.com/repo".to_string(),
+            "X-Custom: value".to_string(),
+        ]);
+        assert_eq!(
+            source.extra_lines(),
+            vec![
+                "Vcs-Svn: https://svn.example.com/repo".to_string(),
+                "X-Custom: value".to_string(),
+            ]
+        );
+
+        // Test add_extra_line
+        source.add_extra_line("Another-Field: another value".to_string());
+        assert_eq!(
+            source.extra_lines(),
+            vec![
+                "Vcs-Svn: https://svn.example.com/repo".to_string(),
+                "X-Custom: value".to_string(),
+                "Another-Field: another value".to_string(),
+            ]
+        );
+
+        // Test adding duplicate line (should not add)
+        source.add_extra_line("X-Custom: value".to_string());
+        assert_eq!(
+            source.extra_lines(),
+            vec![
+                "Vcs-Svn: https://svn.example.com/repo".to_string(),
+                "X-Custom: value".to_string(),
+                "Another-Field: another value".to_string(),
+            ]
+        );
+
+        // Test remove_extra_line
+        source.remove_extra_line("X-Custom: value");
+        assert_eq!(
+            source.extra_lines(),
+            vec![
+                "Vcs-Svn: https://svn.example.com/repo".to_string(),
+                "Another-Field: another value".to_string(),
+            ]
+        );
+    }
+
+    #[test]
+    fn test_extra_field_manipulation() {
+        let mut editor = super::DebcargoEditor::new();
+        let mut source = editor.source();
+
+        // Test initial state
+        assert_eq!(source.get_extra_field("Vcs-Svn"), None);
+
+        // Test set_extra_field
+        source.set_extra_field("Vcs-Svn", "https://svn.example.com/repo");
+        assert_eq!(
+            source.get_extra_field("Vcs-Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+
+        // Test updating existing field
+        source.set_extra_field("Vcs-Svn", "https://svn.example.com/new-repo");
+        assert_eq!(
+            source.get_extra_field("Vcs-Svn"),
+            Some("https://svn.example.com/new-repo".to_string())
+        );
+        // Should still have only one Vcs-Svn line
+        assert_eq!(
+            source.extra_lines(),
+            vec!["Vcs-Svn: https://svn.example.com/new-repo".to_string()]
+        );
+
+        // Test multiple fields
+        source.set_extra_field("X-Custom", "custom value");
+        assert_eq!(
+            source.get_extra_field("X-Custom"),
+            Some("custom value".to_string())
+        );
+        assert_eq!(
+            source.get_extra_field("Vcs-Svn"),
+            Some("https://svn.example.com/new-repo".to_string())
+        );
+        assert_eq!(
+            source.extra_lines(),
+            vec![
+                "Vcs-Svn: https://svn.example.com/new-repo".to_string(),
+                "X-Custom: custom value".to_string(),
+            ]
+        );
+
+        // Test remove_extra_field
+        source.remove_extra_field("Vcs-Svn");
+        assert_eq!(source.get_extra_field("Vcs-Svn"), None);
+        assert_eq!(
+            source.get_extra_field("X-Custom"),
+            Some("custom value".to_string())
+        );
+        assert_eq!(
+            source.extra_lines(),
+            vec!["X-Custom: custom value".to_string()]
+        );
+    }
+
+    #[test]
+    fn test_set_vcs_url() {
+        let mut editor = super::DebcargoEditor::new();
+        let mut source = editor.source();
+
+        // Test native Git field
+        source.set_vcs_url("Git", "https://github.com/example/repo.git");
+        assert_eq!(
+            source.vcs_git(),
+            Some("https://github.com/example/repo.git".to_string())
+        );
+
+        // Test native Browser field
+        source.set_vcs_url("Browser", "https://github.com/example/repo");
+        assert_eq!(
+            source.vcs_browser(),
+            Some("https://github.com/example/repo".to_string())
+        );
+
+        // Test non-native VCS type (should use extra_lines)
+        source.set_vcs_url("Svn", "https://svn.example.com/repo");
+        assert_eq!(
+            source.get_extra_field("Vcs-Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+
+        // Test another non-native VCS type
+        source.set_vcs_url("Bzr", "https://bzr.example.com/repo");
+        assert_eq!(
+            source.get_extra_field("Vcs-Bzr"),
+            Some("https://bzr.example.com/repo".to_string())
+        );
+
+        // Test case insensitivity for native fields
+        source.set_vcs_url("git", "https://gitlab.com/example/repo.git");
+        assert_eq!(
+            source.vcs_git(),
+            Some("https://gitlab.com/example/repo.git".to_string())
+        );
+
+        source.set_vcs_url("browser", "https://gitlab.com/example/repo");
+        assert_eq!(
+            source.vcs_browser(),
+            Some("https://gitlab.com/example/repo".to_string())
+        );
+    }
+
+    #[test]
+    fn test_extra_field_parsing() {
+        let mut editor = super::DebcargoEditor::new();
+        let mut source = editor.source();
+
+        // Test field with spaces after colon
+        source.set_extra_lines(vec!["Vcs-Svn:    https://svn.example.com/repo".to_string()]);
+        assert_eq!(
+            source.get_extra_field("Vcs-Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+
+        // Test field with no spaces after colon
+        source.set_extra_lines(vec!["Vcs-Bzr:https://bzr.example.com/repo".to_string()]);
+        assert_eq!(
+            source.get_extra_field("Vcs-Bzr"),
+            Some("https://bzr.example.com/repo".to_string())
+        );
     }
 }
