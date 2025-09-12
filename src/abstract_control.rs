@@ -35,6 +35,9 @@ pub trait AbstractSource<'a> {
 
     /// Set the VCS URL for the source package.
     fn set_vcs_url(&mut self, vcs_type: &str, url: &str);
+
+    /// Get the VCS URL for the source package.
+    fn get_vcs_url(&self, vcs_type: &str) -> Option<String>;
 }
 
 /// An abstract binary package.
@@ -96,6 +99,11 @@ impl AbstractSource<'_> for PlainSource {
         let field_name = format!("Vcs-{}", vcs_type);
         self.as_mut_deb822().set(&field_name, url);
     }
+
+    fn get_vcs_url(&self, vcs_type: &str) -> Option<String> {
+        let field_name = format!("Vcs-{}", vcs_type);
+        self.as_deb822().get(&field_name)
+    }
 }
 
 impl AbstractBinary for DebcargoBinary<'_> {
@@ -131,6 +139,14 @@ impl<'a> AbstractSource<'a> for DebcargoSource<'a> {
 
     fn set_vcs_url(&mut self, vcs_type: &str, url: &str) {
         (self as &mut crate::debcargo::DebcargoSource).set_vcs_url(vcs_type, url);
+    }
+
+    fn get_vcs_url(&self, vcs_type: &str) -> Option<String> {
+        match vcs_type.to_lowercase().as_str() {
+            "git" => self.vcs_git(),
+            "browser" => self.vcs_browser(),
+            _ => self.get_extra_field(&format!("Vcs-{}", vcs_type)),
+        }
     }
 }
 
@@ -386,5 +402,103 @@ vcs_browser = "https://github.com/example/repo"
 extra_lines = ["Vcs-Svn: https://svn.example.com/repo"]
 "#
         );
+    }
+
+    #[test]
+    fn test_abstract_source_get_vcs_url_plain() {
+        let td = tempfile::tempdir().unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        // Write dummy debian/control with VCS fields
+        tree.mkdir(Path::new("debian")).unwrap();
+        tree.put_file_bytes_non_atomic(
+            Path::new("debian/control"),
+            br#"Source: example
+Maintainer: Alice <alice@example.com>
+Vcs-Git: https://github.com/example/repo.git
+Vcs-Browser: https://github.com/example/repo
+Vcs-Svn: https://svn.example.com/repo
+
+Package: example
+Architecture: any
+Description: Example package
+"#,
+        )
+        .unwrap();
+        tree.add(&[Path::new("debian/control")]).unwrap();
+
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let source = editor.source().unwrap();
+
+        // Test getting various VCS URLs
+        assert_eq!(
+            source.get_vcs_url("Git"),
+            Some("https://github.com/example/repo.git".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("Browser"),
+            Some("https://github.com/example/repo".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+        assert_eq!(source.get_vcs_url("Bzr"), None);
+    }
+
+    #[test]
+    fn test_abstract_source_get_vcs_url_debcargo() {
+        let td = tempfile::tempdir().unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        // Write dummy debcargo.toml with VCS fields
+        tree.mkdir(Path::new("debian")).unwrap();
+        std::fs::write(
+            td.path().join("debian/debcargo.toml"),
+            br#"maintainer = "Alice <alice@example.com>"
+
+[source]
+vcs_git = "https://github.com/example/repo.git"
+vcs_browser = "https://github.com/example/repo"
+extra_lines = ["Vcs-Svn: https://svn.example.com/repo", "Vcs-Bzr: https://bzr.example.com/repo"]
+"#,
+        )
+        .unwrap();
+
+        std::fs::write(
+            td.path().join("Cargo.toml"),
+            br#"[package]
+name = "example"
+version = "0.1.0"
+"#,
+        )
+        .unwrap();
+
+        tree.add(&[(Path::new("debian")), (Path::new("debian/debcargo.toml"))])
+            .unwrap();
+
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let source = editor.source().unwrap();
+
+        // Test getting native VCS URLs
+        assert_eq!(
+            source.get_vcs_url("Git"),
+            Some("https://github.com/example/repo.git".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("Browser"),
+            Some("https://github.com/example/repo".to_string())
+        );
+
+        // Test getting non-native VCS URLs from extra_lines
+        assert_eq!(
+            source.get_vcs_url("Svn"),
+            Some("https://svn.example.com/repo".to_string())
+        );
+        assert_eq!(
+            source.get_vcs_url("Bzr"),
+            Some("https://bzr.example.com/repo".to_string())
+        );
+
+        // Test getting non-existent VCS URL
+        assert_eq!(source.get_vcs_url("Hg"), None);
     }
 }
