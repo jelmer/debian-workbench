@@ -112,7 +112,7 @@ impl DebcargoEditor {
     }
 
     /// Return the source package
-    pub fn source(&mut self) -> DebcargoSource {
+    pub fn source(&mut self) -> DebcargoSource<'_> {
         DebcargoSource { main: self }
     }
 

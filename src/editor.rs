@@ -520,7 +520,7 @@ pub trait MutableTreeEdit {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<TreeEditor<P>, EditorError>;
+    ) -> Result<TreeEditor<'_, P>, EditorError>;
 }
 
 impl<T: MutableTree> MutableTreeEdit for T {
@@ -529,7 +529,7 @@ impl<T: MutableTree> MutableTreeEdit for T {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<TreeEditor<P>, EditorError> {
+    ) -> Result<TreeEditor<'_, P>, EditorError> {
         TreeEditor::new(self, path, allow_generated, allow_reformatting)
     }
 }
