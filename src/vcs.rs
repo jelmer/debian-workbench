@@ -120,11 +120,11 @@ pub fn determine_browser_url(
     vcs_url: &str,
     net_access: Option<bool>,
 ) -> Option<Url> {
-    let parsed_vcs: ParsedVcs = vcs_url.parse().unwrap();
+    let parsed_vcs: ParsedVcs = vcs_url.parse().ok()?;
 
-    let parsed_url: Url = parsed_vcs.repo_url.parse().unwrap();
+    let parsed_url: Url = parsed_vcs.repo_url.parse().ok()?;
 
-    match parsed_url.host_str().unwrap() {
+    match parsed_url.host_str()? {
         host if is_gitlab_site(host, net_access) => Some(determine_gitlab_browser_url(vcs_url)),
 
         "github.com" => {
@@ -859,6 +859,68 @@ Vcs-Git: https://salsa.debian.org/foo/bar.git
                 "Git".to_string(),
                 "https://salsa.debian.org/foo/bar.git".to_string()
             ))
+        );
+    }
+
+    #[test]
+    fn test_determine_browser_url_invalid_inputs() {
+        use super::determine_browser_url;
+
+        // Test with invalid VCS URL that can't be parsed
+        assert_eq!(
+            determine_browser_url("git", "not a valid vcs url", Some(false)),
+            None
+        );
+
+        // Test with empty string
+        assert_eq!(determine_browser_url("git", "", Some(false)), None);
+
+        // Test with URL that has no host
+        assert_eq!(
+            determine_browser_url("git", "file:///path/to/repo", Some(false)),
+            None
+        );
+
+        // Test with malformed URL in VCS string
+        assert_eq!(
+            determine_browser_url("git", "://missing-scheme", Some(false)),
+            None
+        );
+
+        // Test with VCS string that contains invalid URL characters
+        assert_eq!(
+            determine_browser_url("git", "http://[invalid brackets", Some(false)),
+            None
+        );
+
+        // Test with VCS string containing spaces but not in proper format
+        assert_eq!(
+            determine_browser_url("git", "http://example.com/repo with spaces", Some(false)),
+            None
+        );
+    }
+
+    #[test]
+    fn test_determine_browser_url_edge_cases() {
+        use super::determine_browser_url;
+        use url::Url;
+
+        // Test with localhost - should work but return None as it's not a known host
+        assert_eq!(
+            determine_browser_url("git", "http://localhost/repo.git", Some(false)),
+            None
+        );
+
+        // Test with IP address - should work but return None as it's not a known host
+        assert_eq!(
+            determine_browser_url("git", "http://192.168.1.1/repo.git", Some(false)),
+            None
+        );
+
+        // Test with port number - should work for known hosts
+        assert_eq!(
+            determine_browser_url("git", "https://github.com:443/user/repo.git", Some(false)),
+            Some(Url::parse("https://github.com:443/user/repo").unwrap())
         );
     }
 }
