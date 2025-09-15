@@ -10,7 +10,7 @@ homepage = "https://github.com/jelmer/debian-analyzer"
 documentation = "https://docs.rs/debian-analyzer"
 
 [dependencies]
-pyo3 = { version = ">=0.25,<0.26", features = ["serde", "chrono"] }
+pyo3 = { version = ">=0.25,<0.27", features = ["serde", "chrono"] }
 debversion = { version = ">=0.4.0", features = ["serde", "python-debian"] }
 log = "0.4"
 lazy-regex = "3"
