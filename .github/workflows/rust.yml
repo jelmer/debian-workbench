@@ -27,9 +27,13 @@ jobs:
         run: brew install openssl@3
       - name: Install all-features
         run: cargo install cargo-all-features
+      - name: Install minimal-versions
+        run: cargo install cargo-minimal-versions
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build
         run: cargo build-all-features --verbose --all
       - name: Run tests
         run: cargo test-all-features --verbose --all
+      - name: Test with minimal versions
+        run: cargo minimal-versions test --verbose --all
