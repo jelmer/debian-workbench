@@ -15,7 +15,7 @@ debversion = { version = ">=0.4.0", features = ["serde", "python-debian"] }
 log = "0.4"
 lazy-regex = "3"
 serde = { version = "1", features = ["derive"] }
-breezyshim = { version = "0.6.2", features = ["debian", "dirty-tracker"] }
+breezyshim = { version = "0.7.0", features = ["debian", "dirty-tracker"] }
 configparser = "3"
 clap = { version = "4,<5", features = ["derive", "env", "suggestions", "cargo", "string"], optional = true }
 env_logger = { version = ">=0.10", optional = true }
@@ -35,7 +35,7 @@ dep3 = "0.1.0"
 reqwest = { version = ">=0.11", features = ["blocking", "json"] }
 merge3 = { version = "0.2", optional = true }
 difflib = "0.4.0"
-deb822-lossless = "0.3"
+deb822-lossless = "0.4"
 toml_edit = ">=0.23"
 semver = "1"
 sqlx = { version = ">=0.8", optional = true, features = ["postgres"] }

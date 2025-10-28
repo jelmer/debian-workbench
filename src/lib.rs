@@ -197,7 +197,7 @@ impl From<pyo3::PyErr> for ChangelogError {
 
         import_exception!(breezy.transport, NoSuchFile);
 
-        pyo3::Python::with_gil(|py| {
+        pyo3::Python::attach(|py| {
             if e.is_instance_of::<NoSuchFile>(py) {
                 return ChangelogError::NotDebianPackage(
                     e.into_value(py)
@@ -296,8 +296,10 @@ impl std::fmt::Display for Certainty {
 }
 
 #[cfg(feature = "python")]
-impl pyo3::FromPyObject<'_> for Certainty {
-    fn extract_bound(ob: &pyo3::Bound<pyo3::PyAny>) -> pyo3::PyResult<Self> {
+impl pyo3::FromPyObject<'_, '_> for Certainty {
+    type Error = pyo3::PyErr;
+
+    fn extract(ob: pyo3::Borrowed<'_, '_, pyo3::PyAny>) -> Result<Self, Self::Error> {
         use std::str::FromStr;
         let s = ob.extract::<String>()?;
         Certainty::from_str(&s).map_err(pyo3::exceptions::PyValueError::new_err)
@@ -346,8 +348,7 @@ pub fn min_certainty(certainties: &[Certainty]) -> Option<Certainty> {
 
 #[cfg(feature = "python")]
 fn get_git_committer(working_tree: &dyn PyWorkingTree) -> Option<String> {
-    pyo3::prepare_freethreaded_python();
-    pyo3::Python::with_gil(|py| {
+    pyo3::Python::attach(|py| {
         let repo = working_tree.branch().repository();
         let git = match repo.to_object(py).getattr(py, "_git") {
             Ok(x) => Some(x),

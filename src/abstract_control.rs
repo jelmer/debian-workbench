@@ -342,8 +342,8 @@ Description: Example package
             std::str::from_utf8(&text).unwrap(),
             r#"Source: example
 Maintainer: Alice <alice@example.com>
-Vcs-Git: https://github.com/example/repo.git
 Vcs-Browser: https://github.com/example/repo
+Vcs-Git: https://github.com/example/repo.git
 
 Package: example
 Architecture: any

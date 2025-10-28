@@ -1685,8 +1685,8 @@ Section: extra
 Testsuite: autopkgtest
 
 Package: libblah
-Section: extra
 Architecture: all
+Section: extra
 "#,
                 std::fs::read_to_string(td.path().join("debian/control")).unwrap()
             );
