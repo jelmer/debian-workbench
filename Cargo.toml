@@ -10,35 +10,35 @@ homepage = "https://github.com/jelmer/debian-analyzer"
 documentation = "https://docs.rs/debian-analyzer"
 
 [dependencies]
-pyo3 = { version = ">=0.25, <0.28", features = ["serde", "chrono"] }
-debversion = { version = ">=0.4.0", features = ["serde", "python-debian"] }
+pyo3 = { version = ">=0.27, <0.28", features = ["serde", "chrono"] }
+debversion = { version = ">=0.4.0, <0.6", features = ["serde", "python-debian"] }
 log = "0.4"
-lazy-regex = "3"
+lazy-regex = "3.4"
 serde = { version = "1", features = ["derive"] }
-breezyshim = { version = "0.7.0", features = ["debian", "dirty-tracker"] }
+breezyshim = { version = ">=0.7.1, <0.8", features = ["debian", "dirty-tracker"] }
 configparser = "3"
 clap = { version = "4,<5", features = ["derive", "env", "suggestions", "cargo", "string"], optional = true }
-env_logger = { version = ">=0.10", optional = true }
+env_logger = { version = ">=0.10, <0.12", optional = true }
 serde_json = "1"
-chrono = { version = ">=0.4", features = ["serde"] }
-distro-info = { version = ">=0.4.0" }
+chrono = { version = "0.4.42", features = ["serde"] }
+distro-info = { version = ">=0.4.0, <0.5" }
 url = "2"
-tempfile = "3"
+tempfile = "3.20"
 maplit = "1.0.2"
-lazy_static = "1"
-debian-changelog = "0.2"
-debian-control = ">=0.1.37"
-debian-copyright = ">=0.1.26"
-makefile-lossless = "0.2.0"
-patchkit = "0.2.1"
-dep3 = "0.1.0"
-reqwest = { version = ">=0.11", features = ["blocking", "json"] }
+lazy_static = "1.5"
+debian-changelog = "0.2.3"
+debian-control = ">=0.1.44, <0.2"
+debian-copyright = ">=0.1.26, <0.2"
+makefile-lossless = ">=0.2, <0.3"
+patchkit = ">=0.2.2, <0.3"
+dep3 = ">=0.1, <0.2"
+reqwest = { version = ">=0.12.10, <0.13", features = ["blocking", "json"] }
 merge3 = { version = "0.2", optional = true }
 difflib = "0.4.0"
 deb822-lossless = "0.4"
-toml_edit = ">=0.23"
+toml_edit = ">=0.23, <0.24"
 semver = "1"
-sqlx = { version = ">=0.8", optional = true, features = ["postgres"] }
+sqlx = { version = ">=0.8, <0.9", optional = true, features = ["postgres"] }
 filetime = "0.2"
 sha1 = "0.10.6"
 hex = "0.4.3"
@@ -69,4 +69,4 @@ quote = "1.0.37"
 serde_json = "1"
 
 [dev-dependencies]
-serial_test = ">=2"
+serial_test = ">=2, <3"
