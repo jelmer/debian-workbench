@@ -1,6 +1,6 @@
 [package]
 name = "debian-analyzer"
-version = "0.160.0"
+version = "0.160.1"
 authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
@@ -27,7 +27,7 @@ tempfile = "3.20"
 maplit = "1.0.2"
 lazy_static = "1.5"
 debian-changelog = "0.2.3"
-debian-control = ">=0.1.44, <0.2"
+debian-control = ">=0.2, <0.3"
 debian-copyright = ">=0.1.26, <0.2"
 makefile-lossless = ">=0.2, <0.3"
 patchkit = ">=0.2.2, <0.3"
@@ -69,4 +69,4 @@ quote = "1.0.37"
 serde_json = "1"
 
 [dev-dependencies]
-serial_test = ">=2, <3"
+serial_test = ">=3, <4"
