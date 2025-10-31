@@ -27,15 +27,20 @@ jobs:
         run: brew install openssl@3
       - name: Install all-features
         run: cargo install cargo-all-features
-      - name: Install minimal-versions
-        run: cargo install cargo-minimal-versions
-      - name: Install cargo-hack
-        run: cargo install cargo-hack
       - name: Format check
         run: cargo fmt --all -- --check
       - name: Build
         run: cargo build-all-features -- --all
       - name: Run tests
         run: cargo test-all-features -- --all
+
+  minimal-versions:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v5
+      - run: python -m pip install breezy launchpadlib
+      - name: Install minimal-versions
+        run: cargo install cargo-minimal-versions cargo-hack
       - name: Test with minimal versions
-        run: cargo minimal-versions test --all
+        run: cargo minimal-versions --direct test --all

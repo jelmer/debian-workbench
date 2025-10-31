@@ -11,24 +11,24 @@ documentation = "https://docs.rs/debian-analyzer"
 
 [dependencies]
 pyo3 = { version = ">=0.27, <0.28", features = ["serde", "chrono"] }
-debversion = { version = ">=0.4.0, <0.6", features = ["serde", "python-debian"] }
-log = "0.4"
+debversion = { version = ">=0.5.0, <0.6", features = ["serde", "python-debian"] }
+log = "0.4.18"
 lazy-regex = "3.4"
-serde = { version = "1", features = ["derive"] }
+serde = { version = "1.0.145", features = ["derive"] }
 breezyshim = { version = ">=0.7.1, <0.8", features = ["debian", "dirty-tracker"] }
 configparser = "3"
 clap = { version = "4,<5", features = ["derive", "env", "suggestions", "cargo", "string"], optional = true }
 env_logger = { version = ">=0.10, <0.12", optional = true }
-serde_json = "1"
+serde_json = "1.0.85"
 chrono = { version = "0.4.42", features = ["serde"] }
 distro-info = { version = ">=0.4.0, <0.5" }
-url = "2"
+url = "2.4"
 tempfile = "3.20"
 maplit = "1.0.2"
 lazy_static = "1.5"
 debian-changelog = "0.2.3"
 debian-control = ">=0.2, <0.3"
-debian-copyright = ">=0.1.26, <0.2"
+debian-copyright = ">=0.1.29, <0.2"
 makefile-lossless = ">=0.2, <0.3"
 patchkit = ">=0.2.2, <0.3"
 dep3 = { version = ">=0.2.0, <0.3", features = ["lossless"] }
@@ -39,7 +39,7 @@ deb822-lossless = "0.4"
 toml_edit = ">=0.23, <0.24"
 semver = "1"
 sqlx = { version = ">=0.8, <0.9", optional = true, features = ["postgres"] }
-filetime = "0.2"
+filetime = "0.2.10"
 sha1 = "0.10.6"
 hex = "0.4.3"
 svp-client = { version = "0.2.0", optional = true }
@@ -65,8 +65,8 @@ path = "src/bin/deb-vcs-publish.rs"
 required-features = ["cli"]
 
 [build-dependencies]
-quote = "1.0.37"
-serde_json = "1"
+quote = "1.0.40"
+serde_json = "1.0.85"
 
 [dev-dependencies]
 serial_test = ">=3, <4"
