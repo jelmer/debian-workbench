@@ -1,6 +1,6 @@
 [package]
 name = "debian-analyzer"
-version = "0.160.1"
+version = "0.160.2"
 authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
@@ -36,7 +36,7 @@ reqwest = { version = ">=0.12.10, <0.13", features = ["blocking", "json"] }
 merge3 = { version = "0.2", optional = true }
 difflib = "0.4.0"
 deb822-lossless = "0.4"
-toml_edit = ">=0.23, <0.24"
+toml_edit = ">=0.22, <0.24"
 semver = "1"
 sqlx = { version = ">=0.8, <0.9", optional = true, features = ["postgres"] }
 filetime = "0.2.10"
