@@ -390,7 +390,7 @@ pub fn add_patch(
     patches_directory: &Path,
     name: &str,
     contents: &[u8],
-    header: Option<dep3::PatchHeader>,
+    header: Option<dep3::lossless::PatchHeader>,
 ) -> Result<(Vec<std::path::PathBuf>, String), String> {
     if !tree.has_filename(patches_directory) {
         let parent = patches_directory.parent().unwrap();
@@ -476,9 +476,9 @@ where
     reset_tree_with_dirty_tracker(local_tree, Some(basis_tree), Some(subpath), dirty_tracker)
         .map_err(|e| format!("Failed to reset tree: {}", e))?;
     // See https://dep-team.pages.debian.net/deps/dep3/ for fields.
-    let mut dep3_header = dep3::PatchHeader::new();
+    let mut dep3_header = dep3::lossless::PatchHeader::new();
     dep3_header.set_description(description);
-    dep3_header.set_origin(None, dep3::Origin::Other("other".to_string()));
+    dep3_header.set_origin(None, dep3::Origin::Other("other".into()));
     dep3_header.set_last_update(timestamp);
     let patches_directory = subpath.join(tree_patches_directory(local_tree, subpath));
     let (specific_files, patchname) = add_patch(
