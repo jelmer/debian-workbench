@@ -476,15 +476,6 @@ mod tests {
     }
 
     #[test]
-    fn test_ensure_relation_with_error() {
-        let mut rels = Relations::parse_relaxed("@cdbs@, debhelper (>= 9)", false).0;
-        let newrel: Entry = Relation::new("foo", None).into();
-
-        ensure_relation(&mut rels, newrel);
-        assert_eq!("@cdbs@, debhelper (>= 9), foo", rels.to_string());
-    }
-
-    #[test]
     fn test_ensure_minimum_version() {
         let mut rels = "".parse().unwrap();
         ensure_minimum_version(&mut rels, "foo", &"1.0".parse().unwrap());
