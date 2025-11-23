@@ -10,7 +10,6 @@ homepage = "https://github.com/jelmer/debian-analyzer"
 documentation = "https://docs.rs/debian-analyzer"
 
 [dependencies]
-pyo3 = { version = ">=0.27, <0.28", features = ["serde", "chrono"] }
 debversion = { version = ">=0.5.0, <0.6", features = ["serde", "python-debian"] }
 log = "0.4.18"
 lazy-regex = "3.4"
@@ -46,8 +45,7 @@ svp-client = { version = "0.2.0", optional = true }
 
 [features]
 svp = ["dep:svp-client"]
-default = ["python", "merge3"]
-python = []
+default = ["merge3"]
 cli = ["dep:clap", "dep:env_logger"]
 merge3 = ["dep:merge3"]
 udd = ["dep:sqlx"]

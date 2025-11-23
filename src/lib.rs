@@ -8,8 +8,6 @@ use breezyshim::repository::PyRepository;
 use breezyshim::tree::{PyTree, Tree, TreeChange, WorkingTree};
 use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 
 pub mod abstract_control;
 pub mod benfile;
@@ -170,9 +168,6 @@ where
 pub enum ChangelogError {
     /// Not a Debian package
     NotDebianPackage(std::path::PathBuf),
-    #[cfg(feature = "python")]
-    /// Python error
-    Python(pyo3::PyErr),
 }
 
 impl std::fmt::Display for ChangelogError {
@@ -184,33 +179,6 @@ impl std::fmt::Display for ChangelogError {
             #[cfg(feature = "python")]
             ChangelogError::Python(e) => write!(f, "{}", e),
         }
-    }
-}
-
-#[cfg(feature = "python")]
-// This is needed because import_exception! checks the gil-refs
-// feature which we don't provide.
-#[allow(unexpected_cfgs)]
-impl From<pyo3::PyErr> for ChangelogError {
-    fn from(e: pyo3::PyErr) -> Self {
-        use pyo3::import_exception;
-
-        import_exception!(breezy.transport, NoSuchFile);
-
-        pyo3::Python::attach(|py| {
-            if e.is_instance_of::<NoSuchFile>(py) {
-                return ChangelogError::NotDebianPackage(
-                    e.into_value(py)
-                        .bind(py)
-                        .getattr("path")
-                        .unwrap()
-                        .extract()
-                        .unwrap(),
-                );
-            } else {
-                ChangelogError::Python(e)
-            }
-        })
     }
 }
 
@@ -292,31 +260,6 @@ impl std::fmt::Display for Certainty {
             Certainty::Likely => write!(f, "likely"),
             Certainty::Possible => write!(f, "possible"),
         }
-    }
-}
-
-#[cfg(feature = "python")]
-impl pyo3::FromPyObject<'_, '_> for Certainty {
-    type Error = pyo3::PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, '_, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        use std::str::FromStr;
-        let s = ob.extract::<String>()?;
-        Certainty::from_str(&s).map_err(pyo3::exceptions::PyValueError::new_err)
-    }
-}
-
-#[cfg(feature = "python")]
-impl<'py> pyo3::IntoPyObject<'py> for Certainty {
-    type Target = pyo3::types::PyString;
-
-    type Output = pyo3::Bound<'py, Self::Target>;
-
-    type Error = pyo3::PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let s = self.to_string();
-        Ok(pyo3::types::PyString::new(py, &s))
     }
 }
 
