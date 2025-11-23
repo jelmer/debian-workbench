@@ -29,7 +29,7 @@ lazy_static = "1.5"
 debian-changelog = "0.2.3"
 debian-control = ">=0.2, <0.3"
 debian-copyright = ">=0.1.29, <0.2"
-makefile-lossless = ">=0.2, <0.3"
+makefile-lossless = ">=0.2, <0.4"
 patchkit = ">=0.2.2, <0.3"
 dep3 = { version = ">=0.2.0, <0.3", features = ["lossless"] }
 reqwest = { version = ">=0.12.10, <0.13", features = ["blocking", "json"] }
