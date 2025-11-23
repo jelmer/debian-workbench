@@ -3,13 +3,9 @@
 use breezyshim::branch::Branch;
 use breezyshim::dirty_tracker::DirtyTreeTracker;
 use breezyshim::error::Error;
-#[cfg(feature = "python")]
-use breezyshim::repository::PyRepository;
 use breezyshim::tree::{PyTree, Tree, TreeChange, WorkingTree};
 use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
-#[cfg(feature = "python")]
-use pyo3::prelude::*;
 
 pub mod abstract_control;
 pub mod benfile;
@@ -170,9 +166,6 @@ where
 pub enum ChangelogError {
     /// Not a Debian package
     NotDebianPackage(std::path::PathBuf),
-    #[cfg(feature = "python")]
-    /// Python error
-    Python(pyo3::PyErr),
 }
 
 impl std::fmt::Display for ChangelogError {
@@ -181,36 +174,7 @@ impl std::fmt::Display for ChangelogError {
             ChangelogError::NotDebianPackage(path) => {
                 write!(f, "Not a Debian package: {}", path.display())
             }
-            #[cfg(feature = "python")]
-            ChangelogError::Python(e) => write!(f, "{}", e),
         }
-    }
-}
-
-#[cfg(feature = "python")]
-// This is needed because import_exception! checks the gil-refs
-// feature which we don't provide.
-#[allow(unexpected_cfgs)]
-impl From<pyo3::PyErr> for ChangelogError {
-    fn from(e: pyo3::PyErr) -> Self {
-        use pyo3::import_exception;
-
-        import_exception!(breezy.transport, NoSuchFile);
-
-        pyo3::Python::attach(|py| {
-            if e.is_instance_of::<NoSuchFile>(py) {
-                return ChangelogError::NotDebianPackage(
-                    e.into_value(py)
-                        .bind(py)
-                        .getattr("path")
-                        .unwrap()
-                        .extract()
-                        .unwrap(),
-                );
-            } else {
-                ChangelogError::Python(e)
-            }
-        })
     }
 }
 
@@ -295,31 +259,6 @@ impl std::fmt::Display for Certainty {
     }
 }
 
-#[cfg(feature = "python")]
-impl pyo3::FromPyObject<'_, '_> for Certainty {
-    type Error = pyo3::PyErr;
-
-    fn extract(ob: pyo3::Borrowed<'_, '_, pyo3::PyAny>) -> Result<Self, Self::Error> {
-        use std::str::FromStr;
-        let s = ob.extract::<String>()?;
-        Certainty::from_str(&s).map_err(pyo3::exceptions::PyValueError::new_err)
-    }
-}
-
-#[cfg(feature = "python")]
-impl<'py> pyo3::IntoPyObject<'py> for Certainty {
-    type Target = pyo3::types::PyString;
-
-    type Output = pyo3::Bound<'py, Self::Target>;
-
-    type Error = pyo3::PyErr;
-
-    fn into_pyobject(self, py: Python<'py>) -> Result<Self::Output, Self::Error> {
-        let s = self.to_string();
-        Ok(pyo3::types::PyString::new(py, &s))
-    }
-}
-
 /// Check if the actual certainty is sufficient.
 ///
 /// # Arguments
@@ -346,78 +285,9 @@ pub fn min_certainty(certainties: &[Certainty]) -> Option<Certainty> {
     certainties.iter().min().cloned()
 }
 
-#[cfg(feature = "python")]
-fn get_git_committer(working_tree: &dyn PyWorkingTree) -> Option<String> {
-    pyo3::Python::attach(|py| {
-        let repo = working_tree.branch().repository();
-        let git = match repo.to_object(py).getattr(py, "_git") {
-            Ok(x) => Some(x),
-            Err(e) if e.is_instance_of::<pyo3::exceptions::PyAttributeError>(py) => None,
-            Err(e) => {
-                return Err(e);
-            }
-        };
-
-        if let Some(git) = git {
-            let cs = git.call_method0(py, "get_config_stack")?;
-
-            let mut user = std::env::var("GIT_COMMITTER_NAME").ok();
-            let mut email = std::env::var("GIT_COMMITTER_EMAIL").ok();
-            if user.is_none() {
-                match cs.call_method1(py, "get", (("user",), "name")) {
-                    Ok(x) => {
-                        user = Some(
-                            std::str::from_utf8(x.extract::<&[u8]>(py)?)
-                                .unwrap()
-                                .to_string(),
-                        );
-                    }
-                    Err(e) if e.is_instance_of::<pyo3::exceptions::PyKeyError>(py) => {
-                        // Ignore
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
-            }
-            if email.is_none() {
-                match cs.call_method1(py, "get", (("user",), "email")) {
-                    Ok(x) => {
-                        email = Some(
-                            std::str::from_utf8(x.extract::<&[u8]>(py)?)
-                                .unwrap()
-                                .to_string(),
-                        );
-                    }
-                    Err(e) if e.is_instance_of::<pyo3::exceptions::PyKeyError>(py) => {
-                        // Ignore
-                    }
-                    Err(e) => {
-                        return Err(e);
-                    }
-                };
-            }
-
-            if let (Some(user), Some(email)) = (user, email) {
-                return Ok(Some(format!("{} <{}>", user, email)));
-            }
-
-            let gs = breezyshim::config::global_stack().unwrap();
-
-            Ok(gs
-                .get("email")?
-                .map(|email| email.extract::<String>(py).unwrap()))
-        } else {
-            Ok(None)
-        }
-    })
-    .unwrap()
-}
-
 /// Get the committer string for a tree
 pub fn get_committer(working_tree: &dyn PyWorkingTree) -> String {
-    #[cfg(feature = "python")]
-    if let Some(committer) = get_git_committer(working_tree) {
+    if let Some(committer) = breezyshim::git::get_committer(working_tree) {
         return committer;
     }
 
@@ -530,51 +400,6 @@ mod tests {
             (Some("foo".to_string()), Some("bar@example.com".to_string()))
         );
         assert_eq!(parseaddr("foo").unwrap(), (None, Some("foo".to_string())));
-    }
-
-    #[cfg(feature = "python")]
-    #[serial]
-    #[test]
-    fn test_git_env() {
-        let td = tempfile::tempdir().unwrap();
-        let cd = breezyshim::controldir::create_standalone_workingtree(td.path(), "git").unwrap();
-
-        let old_name = std::env::var("GIT_COMMITTER_NAME").ok();
-        let old_email = std::env::var("GIT_COMMITTER_EMAIL").ok();
-
-        std::env::set_var("GIT_COMMITTER_NAME", "Some Git Committer");
-        std::env::set_var("GIT_COMMITTER_EMAIL", "committer@example.com");
-
-        let committer = get_committer(&cd);
-
-        if let Some(old_name) = old_name {
-            std::env::set_var("GIT_COMMITTER_NAME", old_name);
-        } else {
-            std::env::remove_var("GIT_COMMITTER_NAME");
-        }
-
-        if let Some(old_email) = old_email {
-            std::env::set_var("GIT_COMMITTER_EMAIL", old_email);
-        } else {
-            std::env::remove_var("GIT_COMMITTER_EMAIL");
-        }
-
-        assert_eq!("Some Git Committer <committer@example.com>", committer);
-    }
-
-    #[serial]
-    #[test]
-    fn test_git_config() {
-        let td = tempfile::tempdir().unwrap();
-        let cd = breezyshim::controldir::create_standalone_workingtree(td.path(), "git").unwrap();
-
-        std::fs::write(
-            td.path().join(".git/config"),
-            b"[user]\nname = Some Git Committer\nemail = other@example.com",
-        )
-        .unwrap();
-
-        assert_eq!(get_committer(&cd), "Some Git Committer <other@example.com>");
     }
 
     #[test]
