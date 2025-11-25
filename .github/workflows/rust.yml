@@ -20,7 +20,7 @@ jobs:
     runs-on: ${{ matrix.os }}
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: python -m pip install breezy launchpadlib
       - name: Install OpenSSL on macOS
         if: matrix.os == 'macos-latest'
@@ -38,7 +38,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
       - run: python -m pip install breezy launchpadlib
       - name: Install minimal-versions
         run: cargo install cargo-minimal-versions cargo-hack
