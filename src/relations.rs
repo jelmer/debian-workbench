@@ -105,7 +105,7 @@ pub fn ensure_relation(rels: &mut Relations, newrel: Entry) {
     if let Some(pos) = obsolete.pop() {
         rels.replace(pos, newrel);
     } else {
-        rels.push(newrel);
+        rels.add_dependency(newrel, None);
     }
 
     for i in obsolete.into_iter().rev() {
@@ -187,12 +187,13 @@ pub fn ensure_minimum_version(
     }
     if !found {
         changed = true;
-        relations.push(
+        relations.add_dependency(
             Relation::new(
                 package,
                 Some((VersionConstraint::GreaterThanEqual, minimum_version.clone())),
             )
             .into(),
+            None,
         );
     } else {
         for i in relevant_relations.into_iter().rev() {
@@ -264,7 +265,7 @@ pub fn ensure_exact_version(
         if let Some(position) = position {
             relations.insert(position, relation.into());
         } else {
-            relations.push(relation.into());
+            relations.add_dependency(relation.into(), None);
         }
     } else {
         for i in found.into_iter().rev() {
@@ -311,7 +312,7 @@ pub fn ensure_some_version(relations: &mut Relations, package: &str) -> bool {
             return false;
         }
     }
-    relations.push(Relation::simple(package).into());
+    relations.add_dependency(Relation::simple(package).into(), None);
     true
 }
 
