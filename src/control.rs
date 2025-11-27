@@ -934,7 +934,7 @@ mod tests {
             Some("debhelper (>= 10), foo"),
         )
         .unwrap();
-        assert_eq!(val, Some("@cdbs@, foo, debhelper (>= 10)".to_string()));
+        assert_eq!(val, Some("@cdbs@, debhelper (>= 10), foo".to_string()));
         let val = resolve_cdbs_template(
             ("Source", "libnetsds-perl"),
             "Build-Depends",
