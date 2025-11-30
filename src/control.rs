@@ -648,6 +648,52 @@ impl TemplatedControlEditor {
         self.template.as_ref().map(|t| t.template_type)
     }
 
+    /// Normalize field spacing in the control file.
+    ///
+    /// For template-based control files with deb822-style templates (CDBS, Directory),
+    /// this will normalize both the template file and the primary control file.
+    /// For non-deb822 templates (Rules, Gnome, Postgresql, etc.), this returns an error
+    /// since those control files are generated and shouldn't be normalized.
+    /// For files without templates, it normalizes the control file directly.
+    ///
+    /// # Returns
+    /// An error if a template exists but cannot be normalized, or if the template
+    /// is not a deb822-style template.
+    pub fn normalize_field_spacing(&mut self) -> Result<(), EditorError> {
+        let Some(template) = &self.template else {
+            // No template: normalize the control file directly
+            self.primary.as_mut_deb822().normalize_field_spacing();
+            return Ok(());
+        };
+
+        // Check if this is a deb822-style template
+        let is_deb822_template = matches!(
+            template.template_type,
+            TemplateType::Cdbs | TemplateType::Directory
+        );
+
+        if !is_deb822_template {
+            // Non-deb822 template: cannot normalize generated control files
+            return Err(EditorError::GeneratedFile(
+                self.path.clone(),
+                GeneratedFile {
+                    template_path: Some(template.template_path.clone()),
+                    template_type: None,
+                },
+            ));
+        }
+
+        // For deb822-style templates: normalize the template file
+        let mut template_editor =
+            FsEditor::<deb822_lossless::Deb822>::new(&template.template_path, true, false)?;
+        template_editor.normalize_field_spacing();
+        template_editor.commit()?;
+
+        // Also normalize the primary control file
+        self.primary.as_mut_deb822().normalize_field_spacing();
+        Ok(())
+    }
+
     /// Open an existing control file.
     pub fn open<P: AsRef<Path>>(control_path: P) -> Result<Self, EditorError> {
         Self::new(control_path, false)
@@ -944,6 +990,140 @@ mod tests {
         )
         .unwrap();
         assert_eq!(val, Some("@cdbs@, debhelper (>= 10)".to_string()));
+    }
+
+    #[test]
+    fn test_normalize_field_spacing_without_template() {
+        // Test normalize_field_spacing on a control file without a template
+        let td = tempfile::tempdir().unwrap();
+        let control_path = td.path().join("debian").join("control");
+        std::fs::create_dir_all(control_path.parent().unwrap()).unwrap();
+        std::fs::write(
+            &control_path,
+            b"Source: test\nRecommends:  foo\n\nPackage: test\nArchitecture: all\n",
+        )
+        .unwrap();
+
+        let mut editor = TemplatedControlEditor::open(&control_path).unwrap();
+
+        // Check the original spacing
+        let original = editor.as_deb822().to_string();
+        assert_eq!(
+            original,
+            "Source: test\nRecommends:  foo\n\nPackage: test\nArchitecture: all\n"
+        );
+
+        // Normalize field spacing using the new method
+        editor.normalize_field_spacing().unwrap();
+
+        // Check if normalization worked
+        let normalized = editor.as_deb822().to_string();
+        assert_eq!(
+            normalized,
+            "Source: test\nRecommends: foo\n\nPackage: test\nArchitecture: all\n"
+        );
+    }
+
+    #[test]
+    fn test_normalize_field_spacing_with_non_deb822_template() {
+        // Test that normalize_field_spacing returns an error for non-deb822 templates
+        let td = tempfile::tempdir().unwrap();
+        let debian_path = td.path().join("debian");
+        std::fs::create_dir_all(&debian_path).unwrap();
+
+        let control_in_path = debian_path.join("control.in");
+        let control_path = debian_path.join("control");
+        let rules_path = debian_path.join("rules");
+
+        // Create a Rules-style template
+        std::fs::write(
+            &control_in_path,
+            b"Source: test\nRecommends:  foo\n\nPackage: test\nArchitecture: all\n",
+        )
+        .unwrap();
+
+        // Create a rules file that generates control
+        std::fs::write(
+            &rules_path,
+            b"#!/usr/bin/make -f\n\ndebian/control: debian/control.in\n\tcp $< $@\n",
+        )
+        .unwrap();
+
+        // Create a generated control file
+        std::fs::write(
+            &control_path,
+            b"Source: test\nRecommends:  foo\n\nPackage: test\nArchitecture: all\n",
+        )
+        .unwrap();
+
+        let mut editor = TemplatedControlEditor::open(&control_path).unwrap();
+        assert_eq!(editor.template_type(), Some(TemplateType::Rules));
+
+        // Normalize field spacing should fail for non-deb822 templates
+        let result = editor.normalize_field_spacing();
+        assert!(result.is_err());
+
+        // Verify it's a GeneratedFile error
+        match result {
+            Err(EditorError::GeneratedFile(_, _)) => {
+                // Expected error type
+            }
+            _ => panic!("Expected GeneratedFile error"),
+        }
+    }
+
+    #[test]
+    fn test_normalize_field_spacing_with_cdbs_template() {
+        // Test normalize_field_spacing with a CDBS template
+        // Note: We can't actually expand CDBS templates in tests, so we test that
+        // the template file itself gets normalized
+        let td = tempfile::tempdir().unwrap();
+        let debian_path = td.path().join("debian");
+        std::fs::create_dir_all(&debian_path).unwrap();
+
+        let control_in_path = debian_path.join("control.in");
+        let control_path = debian_path.join("control");
+
+        // Create a CDBS-style template with double spacing
+        std::fs::write(
+            &control_in_path,
+            b"Source: test\nBuild-Depends:  @cdbs@\nRecommends:  ${cdbs:Recommends}\n\nPackage: test\nArchitecture: all\n",
+        )
+        .unwrap();
+
+        // Create a control file (pretending it was generated from the template)
+        std::fs::write(
+            &control_path,
+            b"Source: test\nBuild-Depends: debhelper\nRecommends:  foo\n\nPackage: test\nArchitecture: all\n",
+        )
+        .unwrap();
+
+        let mut editor = TemplatedControlEditor::open(&control_path).unwrap();
+        assert_eq!(editor.template_type(), Some(TemplateType::Cdbs));
+
+        // Verify original template has double spacing
+        let original_template = std::fs::read_to_string(&control_in_path).unwrap();
+        assert_eq!(
+            original_template,
+            "Source: test\nBuild-Depends:  @cdbs@\nRecommends:  ${cdbs:Recommends}\n\nPackage: test\nArchitecture: all\n"
+        );
+
+        // Normalize field spacing - this should normalize both template and primary
+        editor.normalize_field_spacing().unwrap();
+
+        // Check that the template was normalized
+        let template_content = std::fs::read_to_string(&control_in_path).unwrap();
+        assert_eq!(
+            template_content,
+            "Source: test\nBuild-Depends: @cdbs@\nRecommends: ${cdbs:Recommends}\n\nPackage: test\nArchitecture: all\n"
+        );
+
+        // Check that the primary control file was also normalized
+        let control_content = editor.as_deb822().to_string();
+        assert_eq!(
+            control_content,
+            "Source: test\nBuild-Depends: debhelper\nRecommends: foo\n\nPackage: test\nArchitecture: all\n"
+        );
     }
 
     mod guess_template_type {
