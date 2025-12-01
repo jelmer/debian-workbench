@@ -259,6 +259,44 @@ pub fn ensure_minimum_debhelper_version(
     Ok(changed)
 }
 
+/// Get the debhelper sequences from Build-Depends.
+///
+/// Extracts all dh-sequence-* packages from the Build-Depends field.
+///
+/// # Arguments
+/// * `source` - The source paragraph from debian/control
+///
+/// # Returns
+/// An iterator over sequence names (without the "dh-sequence-" prefix)
+///
+/// # Examples
+/// ```rust
+/// use debian_analyzer::debhelper::get_sequences;
+///
+/// let text = "Source: foo\nBuild-Depends: dh-sequence-python3, dh-sequence-nodejs\n";
+/// let control = debian_control::Control::read_relaxed(text.as_bytes()).unwrap().0;
+/// let source = control.source().unwrap();
+/// let sequences: Vec<String> = get_sequences(&source).collect();
+/// assert_eq!(sequences, vec!["python3", "nodejs"]);
+/// ```
+pub fn get_sequences(source: &debian_control::lossless::Source) -> impl Iterator<Item = String> {
+    let build_depends = source.build_depends().unwrap_or_else(Relations::new);
+
+    build_depends
+        .entries()
+        .flat_map(|entry| entry.relations().collect::<Vec<_>>())
+        .filter_map(|rel| {
+            let name = rel.name();
+            if name.starts_with("dh-sequence-") {
+                Some(name[12..].to_string())
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>()
+        .into_iter()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -427,6 +465,58 @@ Build-Depends: debhelper
                 result.unwrap_err(),
                 EnsureDebhelperError::DebhelperInWrongField("Build-Depends-Indep".to_string())
             );
+        }
+    }
+
+    mod get_sequences_tests {
+        use super::*;
+
+        #[test]
+        fn test_no_sequences() {
+            let text = "Source: foo\nBuild-Depends: debhelper (>= 10)\n";
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
+                .unwrap()
+                .0;
+            let source = control.source().unwrap();
+
+            let sequences: Vec<String> = get_sequences(&source).collect();
+            assert_eq!(sequences, Vec::<String>::new());
+        }
+
+        #[test]
+        fn test_single_sequence() {
+            let text = "Source: foo\nBuild-Depends: dh-sequence-python3, debhelper (>= 10)\n";
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
+                .unwrap()
+                .0;
+            let source = control.source().unwrap();
+
+            let sequences: Vec<String> = get_sequences(&source).collect();
+            assert_eq!(sequences, vec!["python3"]);
+        }
+
+        #[test]
+        fn test_multiple_sequences() {
+            let text = "Source: foo\nBuild-Depends: dh-sequence-python3, dh-sequence-nodejs, debhelper (>= 10)\n";
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
+                .unwrap()
+                .0;
+            let source = control.source().unwrap();
+
+            let sequences: Vec<String> = get_sequences(&source).collect();
+            assert_eq!(sequences, vec!["python3", "nodejs"]);
+        }
+
+        #[test]
+        fn test_no_build_depends() {
+            let text = "Source: foo\n";
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
+                .unwrap()
+                .0;
+            let source = control.source().unwrap();
+
+            let sequences: Vec<String> = get_sequences(&source).collect();
+            assert_eq!(sequences, Vec::<String>::new());
         }
     }
 }
