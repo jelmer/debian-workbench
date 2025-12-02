@@ -355,7 +355,7 @@ Build-Depends: debhelper
         #[test]
         fn test_already() {
             let text = "Source: foo\nBuild-Depends: debhelper (>= 10)\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();
@@ -378,7 +378,7 @@ Build-Depends: debhelper
         #[test]
         fn test_already_compat() {
             let text = "Source: foo\nBuild-Depends: debhelper-compat (= 10)\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();
@@ -401,7 +401,7 @@ Build-Depends: debhelper
         #[test]
         fn test_bump() {
             let text = "Source: foo\nBuild-Depends: debhelper (>= 10)\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();
@@ -416,7 +416,7 @@ Build-Depends: debhelper
         #[test]
         fn test_bump_compat() {
             let text = "Source: foo\nBuild-Depends: debhelper-compat (= 10)\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();
@@ -439,7 +439,7 @@ Build-Depends: debhelper
         #[test]
         fn test_not_set() {
             let text = "Source: foo\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();
@@ -454,7 +454,7 @@ Build-Depends: debhelper
         #[test]
         fn test_in_indep() {
             let text = "Source: foo\nBuild-Depends-Indep: debhelper (>= 9)\n";
-            let mut control = debian_control::Control::read_relaxed(text.as_bytes())
+            let control = debian_control::Control::read_relaxed(text.as_bytes())
                 .unwrap()
                 .0;
             let mut source = control.source().unwrap();

@@ -2250,13 +2250,13 @@ Build-Depends:
                 .source()
                 .unwrap()
                 .as_mut_deb822()
-                .set("Build-Depends", "\ndebhelper-compat (= 12),\nuuid-dev");
+                .set("Build-Depends", "debhelper-compat (= 12),\nuuid-dev");
 
             editor.commit().unwrap();
 
             assert_eq!(
                 r#"Source: blah
-Build-Depends: 
+Build-Depends:
  debhelper-compat (= 12),
  uuid-dev
 
