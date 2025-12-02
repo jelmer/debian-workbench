@@ -636,6 +636,95 @@ pub fn source_package_vcs(source_package: &impl VcsSource) -> Option<PackageVcs>
     None
 }
 
+/// Error type for GBP tag format expansion
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GbpTagFormatError {
+    /// The tag format string that caused the error
+    pub tag_name: String,
+    /// The unknown variable name
+    pub variable: String,
+}
+
+impl std::fmt::Display for GbpTagFormatError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(
+            f,
+            "Unknown variable '{}' in gbp tag name '{}'",
+            self.variable, self.tag_name
+        )
+    }
+}
+
+impl std::error::Error for GbpTagFormatError {}
+
+/// Expand a gbp-buildpackage tag format string.
+///
+/// Substitutes variables in a tag format string following gbp conventions.
+/// Supports:
+/// - `%(version)s` - The version string
+/// - `%(hversion)s` - The version with dots replaced by dashes
+/// - `%(version%M%R)s` - Version with character M replaced by R
+///
+/// # Arguments
+/// * `tag_format` - Tag format string (e.g., "debian/%(version)s")
+/// * `version` - Version to substitute
+///
+/// # Returns
+/// Expanded tag name or error if unknown variable found
+///
+/// # Examples
+/// ```rust
+/// use debian_analyzer::vcs::gbp_expand_tag_name;
+///
+/// assert_eq!(
+///     gbp_expand_tag_name("debian/%(version)s", "1.0-1").unwrap(),
+///     "debian/1.0-1"
+/// );
+/// assert_eq!(
+///     gbp_expand_tag_name("v%(hversion)s", "1.0-1").unwrap(),
+///     "v1-0-1"
+/// );
+/// assert_eq!(
+///     gbp_expand_tag_name("%(version%~%_)s", "1.0~rc1").unwrap(),
+///     "1.0_rc1"
+/// );
+/// ```
+pub fn gbp_expand_tag_name(tag_format: &str, version: &str) -> Result<String, GbpTagFormatError> {
+    // Handle version mangling: %(version%M%R)s where M is the match character and R is replacement
+    // The R part can contain escaped % as \%
+    let version_mangle_re: &'static lazy_regex::Lazy<lazy_regex::Regex> =
+        lazy_regex::regex!(r"%\(version%(?P<M>.)%(?P<R>([^%]|\\%)+)\)s");
+
+    let (ret, mangled_version) = if let Some(captures) = version_mangle_re.captures(tag_format) {
+        let match_char = captures.name("M").unwrap().as_str();
+        let replacement = captures.name("R").unwrap().as_str().replace(r"\%", "%");
+        let mangled = version.replace(match_char, &replacement);
+        let simplified = version_mangle_re.replace(tag_format, "%(version)s");
+        (simplified.to_string(), mangled)
+    } else {
+        (tag_format.to_string(), version.to_string())
+    };
+
+    // Substitute known variables
+    let hversion = mangled_version.replace('.', "-");
+
+    let result = ret
+        .replace("%(version)s", &mangled_version)
+        .replace("%(hversion)s", &hversion);
+
+    // Check for unknown variables
+    let unknown_var_re: &'static lazy_regex::Lazy<lazy_regex::Regex> =
+        lazy_regex::regex!(r"%\((\w+)\)s");
+    if let Some(captures) = unknown_var_re.captures(&result) {
+        return Err(GbpTagFormatError {
+            tag_name: tag_format.to_string(),
+            variable: captures.get(1).unwrap().as_str().to_string(),
+        });
+    }
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
@@ -922,5 +1011,51 @@ Vcs-Git: https://salsa.debian.org/foo/bar.git
             determine_browser_url("git", "https://github.com:443/user/repo.git", Some(false)),
             Some(Url::parse("https://github.com:443/user/repo").unwrap())
         );
+    }
+
+    #[test]
+    fn test_gbp_expand_tag_name() {
+        use super::gbp_expand_tag_name;
+
+        // Basic version substitution
+        assert_eq!(
+            gbp_expand_tag_name("debian/%(version)s", "1.0-1").unwrap(),
+            "debian/1.0-1"
+        );
+
+        // hversion substitution (dots to dashes)
+        assert_eq!(
+            gbp_expand_tag_name("v%(hversion)s", "1.0-1").unwrap(),
+            "v1-0-1"
+        );
+
+        // Version mangling with tilde to underscore
+        assert_eq!(
+            gbp_expand_tag_name("%(version%~%_)s", "1.0~rc1").unwrap(),
+            "1.0_rc1"
+        );
+
+        // Version mangling with colon to percent
+        assert_eq!(
+            gbp_expand_tag_name("%(version%:%-)s", "1:2.0-1").unwrap(),
+            "1-2.0-1"
+        );
+
+        // Combined version and hversion
+        assert_eq!(
+            gbp_expand_tag_name("%(version)s-%(hversion)s", "1.0").unwrap(),
+            "1.0-1-0"
+        );
+
+        // No substitution needed
+        assert_eq!(
+            gbp_expand_tag_name("upstream/1.0", "1.0").unwrap(),
+            "upstream/1.0"
+        );
+
+        // Unknown variable should error
+        let result = gbp_expand_tag_name("%(unknown)s", "1.0");
+        assert!(result.is_err());
+        assert_eq!(result.unwrap_err().variable, "unknown");
     }
 }
