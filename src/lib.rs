@@ -229,12 +229,13 @@ pub fn add_changelog_entry<T: WorkingTree>(
     let mut cl =
         working_tree.edit_file::<debian_changelog::ChangeLog>(changelog_path, false, true)?;
 
-    cl.auto_add_change(
+    cl.try_auto_add_change(
         entry,
         debian_changelog::get_maintainer().unwrap(),
         None,
         None,
-    );
+    )
+    .unwrap();
 
     cl.commit()?;
 
