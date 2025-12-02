@@ -1,5 +1,4 @@
 //! Debhelper utilities.
-use debian_control::lossless::relations::Relations;
 use debversion::Version;
 use std::path::Path;
 
@@ -219,7 +218,7 @@ pub fn ensure_minimum_debhelper_version(
         }
     }
 
-    let mut rels = source.build_depends().unwrap_or_else(Relations::new);
+    let mut rels = source.build_depends().unwrap_or_default();
 
     // Check if debhelper-compat is present
     for entry in rels.entries() {
@@ -280,7 +279,7 @@ pub fn ensure_minimum_debhelper_version(
 /// assert_eq!(sequences, vec!["python3", "nodejs"]);
 /// ```
 pub fn get_sequences(source: &debian_control::lossless::Source) -> impl Iterator<Item = String> {
-    let build_depends = source.build_depends().unwrap_or_else(Relations::new);
+    let build_depends = source.build_depends().unwrap_or_default();
 
     build_depends
         .entries()

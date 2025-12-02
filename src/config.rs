@@ -35,8 +35,7 @@ impl Config {
     pub fn load_from_path(path: &std::path::Path) -> Result<Self, std::io::Error> {
         let mut ini = Ini::new();
         let data = std::fs::read_to_string(path)?;
-        ini.read(data)
-            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+        ini.read(data).map_err(|e| std::io::Error::other(e))?;
 
         for (section, contents) in ini.get_map_ref() {
             if section != "default" {
