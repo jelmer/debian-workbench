@@ -39,11 +39,16 @@ pub enum TemplateType {
     Debcargo,
 }
 
+/// Error type for template expansion operations
 #[derive(Debug)]
-enum TemplateExpansionError {
+pub enum TemplateExpansionError {
+    /// The expansion failed with an error message
     Failed(String),
+    /// The expand command is missing
     ExpandCommandMissing(String),
+    /// Unknown templating type encountered
     UnknownTemplating(PathBuf, Option<PathBuf>),
+    /// A change conflict occurred
     Conflict(ChangeConflict),
 }
 
@@ -86,7 +91,14 @@ impl std::error::Error for TemplateExpansionError {}
 ///
 /// # Arguments
 /// * `path` - Path to run dh_gnome_clean in
-fn dh_gnome_clean(path: &std::path::Path) -> Result<(), TemplateExpansionError> {
+///
+/// # Errors
+/// Returns an error if:
+/// - Pre-existing .debhelper.log files are found
+/// - No changelog file exists
+/// - The dh_gnome_clean command is not found
+/// - The command fails to execute
+pub fn dh_gnome_clean(path: &std::path::Path) -> Result<(), TemplateExpansionError> {
     for entry in std::fs::read_dir(path.join("debian")).unwrap().flatten() {
         if entry
             .file_name()
@@ -143,7 +155,12 @@ fn dh_gnome_clean(path: &std::path::Path) -> Result<(), TemplateExpansionError> 
 ///
 /// # Arguments
 /// * `path` - Path to run pg_buildext updatecontrol in
-fn pg_buildext_updatecontrol(path: &std::path::Path) -> Result<(), TemplateExpansionError> {
+///
+/// # Errors
+/// Returns an error if:
+/// - The pg_buildext command is not found
+/// - The command fails to execute
+pub fn pg_buildext_updatecontrol(path: &std::path::Path) -> Result<(), TemplateExpansionError> {
     let result = std::process::Command::new("pg_buildext")
         .arg("updatecontrol")
         .current_dir(path)
