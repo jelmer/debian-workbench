@@ -1,5 +1,7 @@
 //! This module provides functions to manipulate debian/rules file.
 
+use makefile_lossless::{Makefile, Rule};
+
 /// Add a particular value to a with argument.
 pub fn dh_invoke_add_with(line: &str, with_argument: &str) -> String {
     if line.contains(with_argument) {
@@ -185,6 +187,101 @@ pub fn check_cdbs(path: &std::path::Path) -> bool {
     false
 }
 
+/// Discard a pointless override rule from a Makefile.
+///
+/// A pointless override is one that just calls the base command without any modifications.
+/// For example:
+/// ```makefile
+/// override_dh_auto_build:
+///     dh_auto_build
+/// ```
+///
+/// Note: The makefile-lossless crate's `recipes()` method only returns actual command lines,
+/// not comment lines, so comment lines are automatically ignored.
+///
+/// # Arguments
+/// * `makefile` - The makefile to modify
+/// * `rule` - The rule to check and potentially remove
+///
+/// # Returns
+/// `true` if the rule was removed, `false` otherwise
+pub fn discard_pointless_override(makefile: &mut Makefile, rule: &Rule) -> bool {
+    // Get the targets for this rule
+    let targets: Vec<String> = rule.targets().collect();
+
+    // Check if any target starts with "override_"
+    let override_target = targets.iter().find(|t| t.starts_with("override_"));
+
+    let Some(target) = override_target else {
+        return false;
+    };
+
+    // Get the command name (strip "override_" prefix)
+    let command = &target["override_".len()..];
+
+    // Get the recipes (commands) for this rule
+    // Note: recipes() only returns actual command lines, not comments
+    let recipes: Vec<String> = rule.recipes().collect();
+
+    // Filter out empty lines
+    let effective_recipes: Vec<&String> = recipes
+        .iter()
+        .filter(|line| !line.trim().is_empty())
+        .collect();
+
+    // Check if there's exactly one effective recipe and it matches the command
+    if effective_recipes.len() != 1 {
+        return false;
+    }
+
+    let recipe = effective_recipes[0].trim();
+    if recipe != command {
+        return false;
+    }
+
+    // Check if there are any prerequisites
+    let prereqs: Vec<String> = rule.prerequisites().collect();
+    if !prereqs.is_empty() {
+        return false;
+    }
+
+    // Remove the rule
+    let rules: Vec<Rule> = makefile.rules().collect();
+    for (i, r) in rules.iter().enumerate() {
+        if r.targets().collect::<Vec<_>>() == targets {
+            if makefile.remove_rule(i).is_ok() {
+                // Also remove from .PHONY if present
+                let _ = makefile.remove_phony_target(target);
+                return true;
+            }
+        }
+    }
+
+    false
+}
+
+/// Discard all pointless override rules from a Makefile.
+///
+/// # Arguments
+/// * `makefile` - The makefile to modify
+///
+/// # Returns
+/// The number of rules that were removed
+pub fn discard_pointless_overrides(makefile: &mut Makefile) -> usize {
+    let mut removed = 0;
+
+    // Collect all rules first to avoid modifying while iterating
+    let rules: Vec<Rule> = makefile.rules().collect();
+
+    for rule in rules {
+        if discard_pointless_override(makefile, &rule) {
+            removed += 1;
+        }
+    }
+
+    removed
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -271,5 +368,105 @@ mod tests {
             dh_invoke_replace_argument("dh $@ --foo --baz", "--foo", "--bar"),
             "dh $@ --bar --baz"
         );
+    }
+
+    #[test]
+    fn test_discard_pointless_override() {
+        // Test a pointless override that should be removed
+        let makefile_text = r#"
+override_dh_auto_build:
+	dh_auto_build
+"#;
+        let mut makefile = makefile_text.parse::<Makefile>().unwrap();
+        let rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(rules.len(), 1);
+
+        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        assert!(removed, "Should have removed the pointless override");
+
+        let remaining_rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(remaining_rules.len(), 0, "Rule should be removed");
+    }
+
+    #[test]
+    fn test_discard_pointless_override_with_args() {
+        // Test an override with arguments - should NOT be removed
+        let makefile_text = r#"
+override_dh_auto_build:
+	dh_auto_build --foo
+"#;
+        let mut makefile = makefile_text.parse::<Makefile>().unwrap();
+        let rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(rules.len(), 1);
+
+        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        assert!(!removed, "Should NOT remove override with arguments");
+
+        let remaining_rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(remaining_rules.len(), 1, "Rule should remain");
+    }
+
+    #[test]
+    fn test_discard_pointless_override_with_comment() {
+        // Test an override with just a comment - since recipes() doesn't return comments,
+        // this should still be removed because only the actual command matters
+        let makefile_text = r#"
+override_dh_auto_build:
+	# This is a comment
+	dh_auto_build
+"#;
+        let mut makefile = makefile_text.parse::<Makefile>().unwrap();
+        let rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(rules.len(), 1);
+
+        // The recipes() method doesn't return comment lines, so this is still pointless
+        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        assert!(
+            removed,
+            "Should remove - recipes() doesn't include comments"
+        );
+    }
+
+    #[test]
+    fn test_discard_pointless_override_not_override() {
+        // Test a regular rule that doesn't start with override_
+        let makefile_text = r#"
+build:
+	dh_auto_build
+"#;
+        let mut makefile = makefile_text.parse::<Makefile>().unwrap();
+        let rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(rules.len(), 1);
+
+        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        assert!(!removed, "Should NOT remove non-override rules");
+    }
+
+    #[test]
+    fn test_discard_pointless_overrides() {
+        // Test removing multiple pointless overrides
+        let makefile_text = r#"
+override_dh_auto_build:
+	dh_auto_build
+
+override_dh_auto_test:
+	dh_auto_test
+
+override_dh_auto_install:
+	dh_auto_install --foo
+"#;
+        let mut makefile = makefile_text.parse::<Makefile>().unwrap();
+        let initial_rules = makefile.rules().count();
+        assert_eq!(initial_rules, 3);
+
+        let removed = discard_pointless_overrides(&mut makefile);
+        assert_eq!(removed, 2, "Should remove 2 pointless overrides");
+
+        let remaining_rules: Vec<Rule> = makefile.rules().collect();
+        assert_eq!(remaining_rules.len(), 1, "Should have 1 rule remaining");
+
+        // Verify the remaining rule is the one with arguments
+        let targets: Vec<String> = remaining_rules[0].targets().collect();
+        assert_eq!(targets, vec!["override_dh_auto_install"]);
     }
 }
