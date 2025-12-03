@@ -27,15 +27,15 @@ tempfile = "3.20"
 maplit = "1.0.2"
 lazy_static = "1.5"
 debian-changelog = "0.2.10"
-debian-control = ">=0.2.7, <0.3"
+debian-control = ">=0.2.8, <0.3"
 debian-copyright = ">=0.1.29, <0.2"
-makefile-lossless = ">=0.2, <0.4"
+makefile-lossless = ">=0.3.2, <0.4"
 patchkit = ">=0.2.2, <0.3"
 dep3 = { version = ">=0.2.0, <0.3", features = ["lossless"] }
 reqwest = { version = ">=0.12.10, <0.13", features = ["blocking", "json"] }
 merge3 = { version = "0.2", optional = true }
 difflib = "0.4.0"
-deb822-lossless = ">=0.4.7, <0.6"
+deb822-lossless = ">=0.5.0, <0.6"
 toml_edit = ">=0.23, <0.24"
 semver = "1"
 sqlx = { version = ">=0.8, <0.9", optional = true, features = ["postgres"] }
