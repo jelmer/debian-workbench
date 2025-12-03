@@ -307,6 +307,14 @@ mod tests {
             dh_invoke_get_with("dh --with=blah,blie"),
             vec!["blah", "blie"]
         );
+        // Regression test for bug where find_iter() returned full match instead of captured group
+        // The function should return just "python3", not " --with python3"
+        assert_eq!(dh_invoke_get_with("dh $@ --with python3"), vec!["python3"]);
+        // Test with multiple addons using space separator
+        assert_eq!(
+            dh_invoke_get_with("dh $@ --with foo,bar,baz"),
+            vec!["foo", "bar", "baz"]
+        );
     }
 
     #[test]
