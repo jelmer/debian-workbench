@@ -1601,7 +1601,8 @@ Multi-Arch: foreign
         let tree =
             create_standalone_workingtree(tempdir.path(), &ControlDirFormat::default()).unwrap();
 
-        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1").unwrap();
+        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1")
+            .unwrap();
 
         let mut editor = tree
             .edit_file::<TestMarshall>(std::path::Path::new("a"), false, false)
@@ -1627,7 +1628,8 @@ Multi-Arch: foreign
         let tree =
             create_standalone_workingtree(tempdir.path(), &ControlDirFormat::default()).unwrap();
 
-        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1").unwrap();
+        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1")
+            .unwrap();
 
         let mut editor = tree
             .edit_file::<TestMarshall>(std::path::Path::new("a"), false, false)
