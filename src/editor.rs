@@ -482,6 +482,12 @@ pub trait Marshallable {
 
     /// Serialize the contents of a file
     fn to_bytes(&self) -> Option<Vec<u8>>;
+
+    /// Create a snapshot of the current state
+    fn snapshot(&self) -> Self;
+
+    /// Check if the current state has changed compared to another state
+    fn has_changed(&self, other: &Self) -> bool;
 }
 
 /// An editor for a file
@@ -509,7 +515,13 @@ pub trait Editor<P: Marshallable>:
     ///
     /// # Returns
     /// A list of paths that were changed
-    fn commit(&self) -> Result<Vec<std::path::PathBuf>, EditorError>;
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError>;
+
+    /// Revert the changes to the original state
+    ///
+    /// # Errors
+    /// Returns an error if reverting fails (e.g., I/O error, parsing error)
+    fn revert(&mut self) -> Result<(), EditorError>;
 }
 
 /// Allow calling .edit_file("debian/control") on a tree
@@ -543,6 +555,7 @@ pub struct TreeEditor<'a, P: Marshallable> {
     allow_generated: bool,
     allow_reformatting: bool,
     parsed: Option<P>,
+    parsed_base: Option<P>,
 }
 
 impl<P: Marshallable> std::ops::Deref for TreeEditor<'_, P> {
@@ -585,6 +598,7 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
             Some(content) => Some(P::from_bytes(content)),
             None => Some(P::empty()),
         };
+        self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
         self.rewritten_content = self.parsed.as_ref().unwrap().to_bytes();
         Ok(())
     }
@@ -605,6 +619,7 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
             allow_generated,
             allow_reformatting,
             parsed: None,
+            parsed_base: None,
         };
         ret.read()?;
         Ok(ret)
@@ -624,7 +639,7 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
         self.rewritten_content.as_deref()
     }
 
-    fn commit(&self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
         let updated_content = self.updated_content();
 
         let changed = tree_edit_formatted_file(
@@ -637,6 +652,9 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
             self.allow_reformatting,
         )?;
         if changed {
+            self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
+            self.orig_content = updated_content.clone();
+            self.rewritten_content = updated_content;
             Ok(vec![self.path.clone()])
         } else {
             Ok(vec![])
@@ -650,6 +668,13 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
             check_generated_contents(&mut buf).is_err()
         }
     }
+
+    fn revert(&mut self) -> Result<(), EditorError> {
+        if let Some(base) = &self.parsed_base {
+            self.parsed = Some(base.snapshot());
+        }
+        Ok(())
+    }
 }
 
 /// An editor for a file
@@ -660,6 +685,7 @@ pub struct FsEditor<P: Marshallable> {
     allow_generated: bool,
     allow_reformatting: bool,
     parsed: Option<P>,
+    parsed_base: Option<P>,
 }
 
 impl<M: Marshallable> std::ops::Deref for FsEditor<M> {
@@ -701,6 +727,7 @@ impl<P: Marshallable> FsEditor<P> {
             Some(content) => Some(P::from_bytes(content)),
             None => Some(P::empty()),
         };
+        self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
         self.rewritten_content = self.parsed.as_ref().unwrap().to_bytes();
         Ok(())
     }
@@ -718,6 +745,7 @@ impl<P: Marshallable> FsEditor<P> {
             allow_generated,
             allow_reformatting,
             parsed: None,
+            parsed_base: None,
         };
         ret.read()?;
         Ok(ret)
@@ -745,7 +773,7 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
         }
     }
 
-    fn commit(&self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
         let updated_content = self.updated_content();
 
         let changed = edit_formatted_file(
@@ -757,10 +785,20 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
             self.allow_reformatting,
         )?;
         if changed {
+            self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
+            self.orig_content = updated_content.clone();
+            self.rewritten_content = updated_content;
             Ok(vec![self.path.clone()])
         } else {
             Ok(vec![])
         }
+    }
+
+    fn revert(&mut self) -> Result<(), EditorError> {
+        if let Some(base) = &self.parsed_base {
+            self.parsed = Some(base.snapshot());
+        }
+        Ok(())
     }
 }
 
@@ -779,6 +817,14 @@ impl Marshallable for debian_control::Control {
         self.source()?;
         Some(self.to_string().into_bytes())
     }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
+    }
 }
 
 impl Marshallable for debian_control::lossy::Control {
@@ -794,6 +840,14 @@ impl Marshallable for debian_control::lossy::Control {
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(self.to_string().into_bytes())
     }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
+    }
 }
 
 impl Marshallable for debian_changelog::ChangeLog {
@@ -807,6 +861,14 @@ impl Marshallable for debian_changelog::ChangeLog {
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(self.to_string().into_bytes())
+    }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
     }
 }
 
@@ -826,6 +888,14 @@ impl Marshallable for debian_copyright::lossless::Copyright {
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(self.to_string().into_bytes())
     }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
+    }
 }
 
 impl Marshallable for makefile_lossless::Makefile {
@@ -839,6 +909,14 @@ impl Marshallable for makefile_lossless::Makefile {
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(self.to_string().into_bytes())
+    }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
     }
 }
 
@@ -855,6 +933,14 @@ impl Marshallable for deb822_lossless::Deb822 {
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
         Some(self.to_string().into_bytes())
+    }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
     }
 }
 
@@ -875,6 +961,14 @@ impl Marshallable for crate::maintscripts::Maintscript {
         } else {
             Some(self.to_string().into_bytes())
         }
+    }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
     }
 }
 
@@ -1053,6 +1147,7 @@ mod tests {
         ));
     }
 
+    #[derive(Clone, PartialEq)]
     struct TestMarshall {
         data: Option<usize>,
     }
@@ -1087,6 +1182,14 @@ mod tests {
         fn to_bytes(&self) -> Option<Vec<u8>> {
             self.data.map(|x| x.to_string().into_bytes())
         }
+
+        fn snapshot(&self) -> Self {
+            self.clone()
+        }
+
+        fn has_changed(&self, other: &Self) -> bool {
+            self != other
+        }
     }
 
     #[test]
@@ -1108,7 +1211,7 @@ mod tests {
     fn test_edit_create_no_changes() {
         let td = tempfile::tempdir().unwrap();
 
-        let editor = FsEditor::<TestMarshall>::new(&td.path().join("a"), false, false).unwrap();
+        let mut editor = FsEditor::<TestMarshall>::new(&td.path().join("a"), false, false).unwrap();
         assert!(!editor.has_changed());
         assert_eq!(editor.commit().unwrap(), Vec::<std::path::PathBuf>::new());
         assert_eq!(editor.get_data(), None);
@@ -1401,5 +1504,149 @@ Multi-Arch: foreign
             "new content\n",
             std::fs::read_to_string(td.path().join("a")).unwrap()
         );
+    }
+
+    #[test]
+    fn test_revert_before_commit() {
+        let td = tempfile::tempdir().unwrap();
+        std::fs::write(td.path().join("a"), "1").unwrap();
+
+        let mut editor = FsEditor::<TestMarshall>::new(&td.path().join("a"), false, false).unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+        assert!(!editor.has_changed());
+
+        // Make a change
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(2));
+        assert!(editor.has_changed());
+
+        // Revert the change
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+        assert!(!editor.has_changed());
+
+        // File should still have original content
+        assert_eq!("1", std::fs::read_to_string(td.path().join("a")).unwrap());
+    }
+
+    #[test]
+    fn test_revert_after_commit() {
+        let td = tempfile::tempdir().unwrap();
+        std::fs::write(td.path().join("a"), "1").unwrap();
+
+        let mut editor = FsEditor::<TestMarshall>::new(&td.path().join("a"), false, false).unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+
+        // Make a change and commit
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(2));
+        editor.commit().unwrap();
+        assert_eq!("2", std::fs::read_to_string(td.path().join("a")).unwrap());
+        assert!(!editor.has_changed());
+
+        // Make another change
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(3));
+        assert!(editor.has_changed());
+
+        // Revert should go back to committed state (2, not original 1)
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(2));
+        assert!(!editor.has_changed());
+
+        // File should still have committed content
+        assert_eq!("2", std::fs::read_to_string(td.path().join("a")).unwrap());
+    }
+
+    #[test]
+    fn test_multiple_commit_revert_cycles() {
+        let td = tempfile::tempdir().unwrap();
+        std::fs::write(td.path().join("a"), "1").unwrap();
+
+        let mut editor = FsEditor::<TestMarshall>::new(&td.path().join("a"), false, false).unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+
+        // First cycle: change, commit
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(2));
+        editor.commit().unwrap();
+        assert_eq!("2", std::fs::read_to_string(td.path().join("a")).unwrap());
+
+        // Second cycle: change, revert, change again, commit
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(3));
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(2));
+
+        editor.inc_data();
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(4));
+        editor.commit().unwrap();
+        assert_eq!("4", std::fs::read_to_string(td.path().join("a")).unwrap());
+
+        // Third cycle: change, revert
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(5));
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(4));
+        assert!(!editor.has_changed());
+        assert_eq!("4", std::fs::read_to_string(td.path().join("a")).unwrap());
+    }
+
+    #[test]
+    fn test_tree_editor_revert_before_commit() {
+        use breezyshim::controldir::{create_standalone_workingtree, ControlDirFormat};
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let tree =
+            create_standalone_workingtree(tempdir.path(), &ControlDirFormat::default()).unwrap();
+
+        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1").unwrap();
+
+        let mut editor = tree
+            .edit_file::<TestMarshall>(std::path::Path::new("a"), false, false)
+            .unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+
+        // Make a change
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(2));
+        assert!(editor.has_changed());
+
+        // Revert the change
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+        assert!(!editor.has_changed());
+    }
+
+    #[test]
+    fn test_tree_editor_revert_after_commit() {
+        use breezyshim::controldir::{create_standalone_workingtree, ControlDirFormat};
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let tree =
+            create_standalone_workingtree(tempdir.path(), &ControlDirFormat::default()).unwrap();
+
+        tree.put_file_bytes_non_atomic(std::path::Path::new("a"), b"1").unwrap();
+
+        let mut editor = tree
+            .edit_file::<TestMarshall>(std::path::Path::new("a"), false, false)
+            .unwrap();
+        assert_eq!(editor.get_data(), Some(1));
+
+        // Make a change and commit
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(2));
+        editor.commit().unwrap();
+        assert!(!editor.has_changed());
+
+        // Make another change
+        editor.inc_data();
+        assert_eq!(editor.get_data(), Some(3));
+
+        // Revert should go back to committed state (2, not original 1)
+        editor.revert().unwrap();
+        assert_eq!(editor.get_data(), Some(2));
+        assert!(!editor.has_changed());
     }
 }
