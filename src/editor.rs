@@ -972,6 +972,30 @@ impl Marshallable for crate::maintscripts::Maintscript {
     }
 }
 
+impl Marshallable for debian_watch::WatchFile {
+    fn from_bytes(content: &[u8]) -> Self {
+        use std::str::FromStr;
+        let content = std::str::from_utf8(content).unwrap();
+        debian_watch::WatchFile::from_str(content).unwrap()
+    }
+
+    fn empty() -> Self {
+        debian_watch::WatchFile::new(Some(4))
+    }
+
+    fn to_bytes(&self) -> Option<Vec<u8>> {
+        Some(self.to_string().into_bytes())
+    }
+
+    fn snapshot(&self) -> Self {
+        self.clone()
+    }
+
+    fn has_changed(&self, other: &Self) -> bool {
+        self != other
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
