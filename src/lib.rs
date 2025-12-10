@@ -232,7 +232,7 @@ pub fn add_changelog_entry<T: WorkingTree>(
     cl.try_auto_add_change(
         entry,
         debian_changelog::get_maintainer().unwrap(),
-        Some(chrono::Local::now()),
+        Some(chrono::Utc::now().fixed_offset()),
         None,
     )
     .unwrap();
