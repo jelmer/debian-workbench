@@ -2,7 +2,7 @@
 use sqlx::error::BoxDynError;
 use sqlx::{Error, PgPool, Postgres};
 
-type BugId = i64;
+type BugId = i32;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 /// Type of WNPP bug.
@@ -125,4 +125,29 @@ pub async fn find_wnpp_bugs_harder(names: &[&str]) -> Result<Vec<(BugId, BugKind
         }
     }
     Ok(vec![])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_bug_id_is_i32() {
+        // Ensure BugId is i32 to match the database INT4 type
+        let _: BugId = 123456i32;
+        assert_eq!(std::mem::size_of::<BugId>(), 4);
+    }
+
+    #[test]
+    fn test_bug_kind_parsing() {
+        assert_eq!("RFP".parse::<BugKind>().unwrap(), BugKind::RFP);
+        assert_eq!("ITP".parse::<BugKind>().unwrap(), BugKind::ITP);
+        assert!("INVALID".parse::<BugKind>().is_err());
+    }
+
+    #[test]
+    fn test_bug_kind_display() {
+        assert_eq!(BugKind::RFP.to_string(), "RFP");
+        assert_eq!(BugKind::ITP.to_string(), "ITP");
+    }
 }
