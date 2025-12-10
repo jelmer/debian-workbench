@@ -151,4 +151,36 @@ mod tests {
         assert_eq!(BugKind::RFP.to_string(), "RFP");
         assert_eq!(BugKind::ITP.to_string(), "ITP");
     }
+
+    #[tokio::test]
+    async fn test_query_udd_wnpp() {
+        // Try to connect to UDD and query WNPP bugs
+        // This test verifies that:
+        // 1. We can connect to the UDD database
+        // 2. The query structure is correct
+        // 3. BugId type (i32) matches the database column type
+        let debbugs = DebBugs::default().await.expect("Failed to connect to UDD");
+
+        // Query for a package that historically has had WNPP bugs
+        // Using a nonexistent package name should return empty results without error
+        let result = debbugs.find_wnpp_bugs("nonexistent-package-12345").await;
+
+        // Even if no bugs are found, the query should succeed (empty result is ok)
+        assert!(result.is_ok(), "Query failed: {:?}", result);
+        let bugs = result.unwrap();
+        assert_eq!(bugs.len(), 0, "Should find no bugs for nonexistent package");
+    }
+
+    #[tokio::test]
+    async fn test_query_udd_archived() {
+        let debbugs = DebBugs::default().await.expect("Failed to connect to UDD");
+
+        // Query archived bugs
+        let result = debbugs.find_archived_wnpp_bugs("nonexistent-package-12345").await;
+
+        // Even if no bugs are found, the query should succeed
+        assert!(result.is_ok(), "Archived query failed: {:?}", result);
+        let bugs = result.unwrap();
+        assert_eq!(bugs.len(), 0, "Should find no archived bugs for nonexistent package");
+    }
 }

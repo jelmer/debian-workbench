@@ -651,14 +651,7 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
     }
 
     fn updated_content(&self) -> Option<Vec<u8>> {
-        let bytes = self.parsed.as_ref().unwrap().to_bytes();
-        if let Some(ref b) = bytes {
-            eprintln!(
-                "DEBUG TreeEditor::updated_content() returning {} bytes",
-                b.len()
-            );
-        }
-        bytes
+        self.parsed.as_ref().unwrap().to_bytes()
     }
 
     fn rewritten_content(&self) -> Option<&[u8]> {
@@ -784,14 +777,7 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
     }
 
     fn updated_content(&self) -> Option<Vec<u8>> {
-        let bytes = self.parsed.as_ref().unwrap().to_bytes();
-        if let Some(ref b) = bytes {
-            eprintln!(
-                "DEBUG FsEditor::updated_content() returning {} bytes",
-                b.len()
-            );
-        }
-        bytes
+        self.parsed.as_ref().unwrap().to_bytes()
     }
 
     fn rewritten_content(&self) -> Option<&[u8]> {
@@ -898,16 +884,7 @@ impl Marshallable for debian_copyright::lossless::Copyright {
     }
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
-        eprintln!(
-            "DEBUG Copyright::to_bytes() - license paragraphs count: {}",
-            self.iter_licenses().count()
-        );
-        let s = self.to_string();
-        eprintln!(
-            "DEBUG Copyright::to_bytes() - serialized length: {} bytes",
-            s.len()
-        );
-        Some(s.into_bytes())
+        Some(self.to_string().into_bytes())
     }
 
     fn snapshot(&self) -> Self {
