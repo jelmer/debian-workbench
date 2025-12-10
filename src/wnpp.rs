@@ -2,7 +2,8 @@
 use sqlx::error::BoxDynError;
 use sqlx::{Error, PgPool, Postgres};
 
-type BugId = i32;
+/// Bug identifier
+pub type BugId = i32;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, serde::Serialize, serde::Deserialize)]
 /// Type of WNPP bug.

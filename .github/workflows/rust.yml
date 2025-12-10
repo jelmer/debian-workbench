@@ -23,6 +23,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install breezy launchpadlib
       - name: Install OpenSSL on macOS
         if: matrix.os == 'macos-latest'
@@ -34,15 +35,16 @@ jobs:
       - name: Build
         run: cargo build-all-features -- --all
       - name: Run tests
-        run: cargo test-all-features -j 1 -- --all
+        run: cargo all-features test --jobs 1
 
   minimal-versions:
     runs-on: ubuntu-latest
 
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
       - run: python -m pip install breezy launchpadlib
       - name: Install minimal-versions
         run: cargo install cargo-minimal-versions cargo-hack
       - name: Test with minimal versions
-        run: cargo minimal-versions --direct test -j 1 --all
+        run: cargo minimal-versions --direct test --jobs 1
