@@ -206,58 +206,33 @@ pub fn check_cdbs(path: &std::path::Path) -> bool {
 /// # Returns
 /// `true` if the rule was removed, `false` otherwise
 pub fn discard_pointless_override(makefile: &mut Makefile, rule: &Rule) -> bool {
-    // Get the targets for this rule
-    let targets: Vec<String> = rule.targets().collect();
-
     // Check if any target starts with "override_"
-    let override_target = targets.iter().find(|t| t.starts_with("override_"));
-
-    let Some(target) = override_target else {
+    let Some(target) = rule.targets().find(|t| t.starts_with("override_")) else {
         return false;
     };
 
     // Get the command name (strip "override_" prefix)
     let command = &target["override_".len()..];
 
-    // Get the recipes (commands) for this rule
-    // Note: recipes() only returns actual command lines, not comments
-    let recipes: Vec<String> = rule.recipes().collect();
-
-    // Filter out empty lines
-    let effective_recipes: Vec<&String> = recipes
-        .iter()
+    // Get the recipes (commands) for this rule and filter out empty lines
+    let effective_recipes: Vec<String> = rule
+        .recipes()
         .filter(|line| !line.trim().is_empty())
         .collect();
 
     // Check if there's exactly one effective recipe and it matches the command
-    if effective_recipes.len() != 1 {
-        return false;
-    }
-
-    let recipe = effective_recipes[0].trim();
-    if recipe != command {
+    if effective_recipes.len() != 1 || effective_recipes[0].trim() != command {
         return false;
     }
 
     // Check if there are any prerequisites
-    let prereqs: Vec<String> = rule.prerequisites().collect();
-    if !prereqs.is_empty() {
+    if rule.prerequisites().next().is_some() {
         return false;
     }
 
-    // Remove the rule
-    let rules: Vec<Rule> = makefile.rules().collect();
-    for (i, r) in rules.iter().enumerate() {
-        if r.targets().collect::<Vec<_>>() == targets {
-            if makefile.remove_rule(i).is_ok() {
-                // Also remove from .PHONY if present
-                let _ = makefile.remove_phony_target(target);
-                return true;
-            }
-        }
-    }
-
-    false
+    // Remove the rule and also from .PHONY if present
+    let _ = makefile.remove_phony_target(&target);
+    rule.clone().remove().is_ok()
 }
 
 /// Discard all pointless override rules from a Makefile.
