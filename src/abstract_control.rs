@@ -181,7 +181,8 @@ impl<E: crate::editor::Editor<PlainControl>> AbstractControlEditor for E {
 pub fn edit_control<'a>(
     tree: &dyn breezyshim::workingtree::WorkingTree,
     subpath: &Path,
-) -> Result<Box<dyn AbstractControlEditor + 'a>, crate::editor::EditorError> {
+) -> Result<Box<dyn AbstractControlEditor + 'a>, crate::editor::EditorError<deb822_lossless::Error>>
+{
     if tree.has_filename(&subpath.join("debian/debcargo.toml")) {
         Ok(Box::new(crate::debcargo::DebcargoEditor::from_directory(
             &tree.abspath(subpath).unwrap(),

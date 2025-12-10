@@ -650,7 +650,9 @@ impl DerefMut for TemplatedControlEditor {
 
 impl TemplatedControlEditor {
     /// Create a new control file editor.
-    pub fn create<P: AsRef<Path>>(control_path: P) -> Result<Self, EditorError> {
+    pub fn create<P: AsRef<Path>>(
+        control_path: P,
+    ) -> Result<Self, EditorError<deb822_lossless::Error>> {
         if control_path.as_ref().exists() {
             return Err(EditorError::IoError(std::io::Error::new(
                 std::io::ErrorKind::AlreadyExists,
@@ -676,7 +678,7 @@ impl TemplatedControlEditor {
     /// # Returns
     /// An error if a template exists but cannot be normalized, or if the template
     /// is not a deb822-style template.
-    pub fn normalize_field_spacing(&mut self) -> Result<(), EditorError> {
+    pub fn normalize_field_spacing(&mut self) -> Result<(), EditorError<deb822_lossless::Error>> {
         let Some(template) = &self.template else {
             // No template: normalize the control file directly
             self.primary.as_mut_deb822().normalize_field_spacing();
@@ -712,12 +714,17 @@ impl TemplatedControlEditor {
     }
 
     /// Open an existing control file.
-    pub fn open<P: AsRef<Path>>(control_path: P) -> Result<Self, EditorError> {
+    pub fn open<P: AsRef<Path>>(
+        control_path: P,
+    ) -> Result<Self, EditorError<deb822_lossless::Error>> {
         Self::new(control_path, false)
     }
 
     /// Create a new control file editor.
-    pub fn new<P: AsRef<Path>>(control_path: P, allow_missing: bool) -> Result<Self, EditorError> {
+    pub fn new<P: AsRef<Path>>(
+        control_path: P,
+        allow_missing: bool,
+    ) -> Result<Self, EditorError<deb822_lossless::Error>> {
         let path = control_path.as_ref();
         let (template, template_only) = if !path.exists() {
             if let Some(template) = Template::find(path) {
@@ -807,7 +814,7 @@ impl TemplatedControlEditor {
     }
 
     /// Commit the changes to the control file and template.
-    pub fn commit(&mut self) -> Result<Vec<PathBuf>, EditorError> {
+    pub fn commit(&mut self) -> Result<Vec<PathBuf>, EditorError<deb822_lossless::Error>> {
         let mut changed_files: Vec<PathBuf> = vec![];
         if self.template_only {
             // Remove the control file if it exists.
@@ -959,11 +966,11 @@ impl Editor<debian_control::Control> for TemplatedControlEditor {
         self.primary.is_generated()
     }
 
-    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError<deb822_lossless::Error>> {
         TemplatedControlEditor::commit(self)
     }
 
-    fn revert(&mut self) -> Result<(), EditorError> {
+    fn revert(&mut self) -> Result<(), EditorError<deb822_lossless::Error>> {
         self.primary.revert()
     }
 }
@@ -1672,7 +1679,7 @@ Package: bar
 "#,
             )
             .unwrap();
-            let mut editor =
+            let editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             assert!(editor.source().is_none());
         }

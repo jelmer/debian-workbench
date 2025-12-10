@@ -205,7 +205,7 @@ pub fn check_cdbs(path: &std::path::Path) -> bool {
 ///
 /// # Returns
 /// `true` if the rule was removed, `false` otherwise
-pub fn discard_pointless_override(makefile: &mut Makefile, rule: &Rule) -> bool {
+pub fn discard_pointless_override(makefile: &mut Makefile, rule: Rule) -> bool {
     // Check if any target starts with "override_"
     let Some(target) = rule.targets().find(|t| t.starts_with("override_")) else {
         return false;
@@ -232,7 +232,7 @@ pub fn discard_pointless_override(makefile: &mut Makefile, rule: &Rule) -> bool 
 
     // Remove the rule and also from .PHONY if present
     let _ = makefile.remove_phony_target(&target);
-    rule.clone().remove().is_ok()
+    rule.remove().is_ok()
 }
 
 /// Discard all pointless override rules from a Makefile.
@@ -249,7 +249,7 @@ pub fn discard_pointless_overrides(makefile: &mut Makefile) -> usize {
     let rules: Vec<Rule> = makefile.rules().collect();
 
     for rule in rules {
-        if discard_pointless_override(makefile, &rule) {
+        if discard_pointless_override(makefile, rule) {
             removed += 1;
         }
     }
@@ -361,10 +361,10 @@ override_dh_auto_build:
 	dh_auto_build
 "#;
         let mut makefile = makefile_text.parse::<Makefile>().unwrap();
-        let rules: Vec<Rule> = makefile.rules().collect();
+        let mut rules: Vec<Rule> = makefile.rules().collect();
         assert_eq!(rules.len(), 1);
 
-        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        let removed = discard_pointless_override(&mut makefile, rules.pop().unwrap());
         assert!(removed, "Should have removed the pointless override");
 
         let remaining_rules: Vec<Rule> = makefile.rules().collect();
@@ -379,10 +379,10 @@ override_dh_auto_build:
 	dh_auto_build --foo
 "#;
         let mut makefile = makefile_text.parse::<Makefile>().unwrap();
-        let rules: Vec<Rule> = makefile.rules().collect();
+        let mut rules: Vec<Rule> = makefile.rules().collect();
         assert_eq!(rules.len(), 1);
 
-        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        let removed = discard_pointless_override(&mut makefile, rules.pop().unwrap());
         assert!(!removed, "Should NOT remove override with arguments");
 
         let remaining_rules: Vec<Rule> = makefile.rules().collect();
@@ -399,11 +399,11 @@ override_dh_auto_build:
 	dh_auto_build
 "#;
         let mut makefile = makefile_text.parse::<Makefile>().unwrap();
-        let rules: Vec<Rule> = makefile.rules().collect();
+        let mut rules: Vec<Rule> = makefile.rules().collect();
         assert_eq!(rules.len(), 1);
 
         // The recipes() method doesn't return comment lines, so this is still pointless
-        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        let removed = discard_pointless_override(&mut makefile, rules.pop().unwrap());
         assert!(
             removed,
             "Should remove - recipes() doesn't include comments"
@@ -418,10 +418,10 @@ build:
 	dh_auto_build
 "#;
         let mut makefile = makefile_text.parse::<Makefile>().unwrap();
-        let rules: Vec<Rule> = makefile.rules().collect();
+        let mut rules: Vec<Rule> = makefile.rules().collect();
         assert_eq!(rules.len(), 1);
 
-        let removed = discard_pointless_override(&mut makefile, &rules[0]);
+        let removed = discard_pointless_override(&mut makefile, rules.pop().unwrap());
         assert!(!removed, "Should NOT remove non-override rules");
     }
 

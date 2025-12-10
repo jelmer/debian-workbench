@@ -224,7 +224,7 @@ pub fn add_changelog_entry<T: WorkingTree>(
     working_tree: &T,
     changelog_path: &std::path::Path,
     entry: &[&str],
-) -> Result<(), crate::editor::EditorError> {
+) -> Result<(), crate::editor::EditorError<debian_changelog::Error>> {
     use crate::editor::{Editor, MutableTreeEdit};
     let mut cl =
         working_tree.edit_file::<debian_changelog::ChangeLog>(changelog_path, false, true)?;

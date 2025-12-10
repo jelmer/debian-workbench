@@ -235,7 +235,7 @@ pub fn tree_check_generated_file(
 
 #[derive(Debug)]
 /// Error that can occur when editing a file.
-pub enum EditorError {
+pub enum EditorError<E: std::error::Error> {
     /// One of the files is generated from another file, and we were unable to edit it.
     GeneratedFile(PathBuf, GeneratedFile),
 
@@ -250,15 +250,21 @@ pub enum EditorError {
 
     /// Breezy error
     BrzError(BrzError),
+
+    /// UTF-8 encoding error
+    Utf8Error(std::str::Utf8Error),
+
+    /// Error parsing or marshalling file contents
+    MarshallingError(E),
 }
 
-impl From<BrzError> for EditorError {
+impl<E: std::error::Error> From<BrzError> for EditorError<E> {
     fn from(e: BrzError) -> Self {
         EditorError::BrzError(e)
     }
 }
 
-impl std::fmt::Display for EditorError {
+impl<E: std::error::Error> std::fmt::Display for EditorError<E> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EditorError::GeneratedFile(p, _e) => {
@@ -272,15 +278,23 @@ impl std::fmt::Display for EditorError {
             EditorError::TemplateError(p, e) => {
                 write!(f, "Error in template {}: {}", p.display(), e)
             }
+            EditorError::Utf8Error(e) => write!(f, "UTF-8 error: {}", e),
+            EditorError::MarshallingError(e) => write!(f, "Marshalling error: {}", e),
         }
     }
 }
 
-impl std::error::Error for EditorError {}
+impl<E: std::error::Error> std::error::Error for EditorError<E> {}
 
-impl From<std::io::Error> for EditorError {
+impl<E: std::error::Error> From<std::io::Error> for EditorError<E> {
     fn from(e: std::io::Error) -> Self {
         EditorError::IoError(e)
+    }
+}
+
+impl<E: std::error::Error> From<std::str::Utf8Error> for EditorError<E> {
+    fn from(e: std::str::Utf8Error) -> Self {
+        EditorError::Utf8Error(e)
     }
 }
 
@@ -389,14 +403,14 @@ fn reformat_file<'a>(
 ///
 /// # Returns
 /// `true` if the file was changed, `false` otherwise
-pub fn edit_formatted_file(
+pub fn edit_formatted_file<E: std::error::Error>(
     path: &std::path::Path,
     original_contents: Option<&[u8]>,
     rewritten_contents: Option<&[u8]>,
     updated_contents: Option<&[u8]>,
     allow_generated: bool,
     allow_reformatting: bool,
-) -> Result<bool, EditorError> {
+) -> Result<bool, EditorError<E>> {
     if original_contents == updated_contents {
         return Ok(false);
     }
@@ -436,7 +450,7 @@ pub fn edit_formatted_file(
 ///
 /// # Returns
 /// `true` if the file was changed, `false` otherwise
-pub fn tree_edit_formatted_file(
+pub fn tree_edit_formatted_file<E: std::error::Error>(
     tree: &dyn MutableTree,
     path: &std::path::Path,
     original_contents: Option<&[u8]>,
@@ -444,7 +458,7 @@ pub fn tree_edit_formatted_file(
     updated_contents: Option<&[u8]>,
     allow_generated: bool,
     allow_reformatting: bool,
-) -> Result<bool, EditorError> {
+) -> Result<bool, EditorError<E>> {
     assert!(path.is_relative());
     if original_contents == updated_contents {
         return Ok(false);
@@ -474,8 +488,13 @@ pub fn tree_edit_formatted_file(
 
 /// A trait for types that can be edited
 pub trait Marshallable {
+    /// The error type returned when parsing fails
+    type Error: std::error::Error + Send + Sync + 'static;
+
     /// Parse the contents of a file
-    fn from_bytes(content: &[u8]) -> Self;
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error>
+    where
+        Self: Sized;
 
     /// Create an empty instance
     fn empty() -> Self;
@@ -515,13 +534,13 @@ pub trait Editor<P: Marshallable>:
     ///
     /// # Returns
     /// A list of paths that were changed
-    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError>;
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError<P::Error>>;
 
     /// Revert the changes to the original state
     ///
     /// # Errors
     /// Returns an error if reverting fails (e.g., I/O error, parsing error)
-    fn revert(&mut self) -> Result<(), EditorError>;
+    fn revert(&mut self) -> Result<(), EditorError<P::Error>>;
 }
 
 /// Allow calling .edit_file("debian/control") on a tree
@@ -532,7 +551,7 @@ pub trait MutableTreeEdit {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<TreeEditor<'_, P>, EditorError>;
+    ) -> Result<TreeEditor<'_, P>, EditorError<P::Error>>;
 }
 
 impl<T: MutableTree> MutableTreeEdit for T {
@@ -541,7 +560,7 @@ impl<T: MutableTree> MutableTreeEdit for T {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<TreeEditor<'_, P>, EditorError> {
+    ) -> Result<TreeEditor<'_, P>, EditorError<P::Error>> {
         TreeEditor::new(self, path, allow_generated, allow_reformatting)
     }
 }
@@ -579,7 +598,7 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: Option<bool>,
-    ) -> Result<Self, EditorError> {
+    ) -> Result<Self, EditorError<P::Error>> {
         let allow_reformatting = allow_reformatting.unwrap_or_else(|| {
             std::env::var("REFORMATTING").unwrap_or("disallow".to_string()) == "allow"
         });
@@ -588,14 +607,14 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
     }
 
     /// Read the file contents and parse them
-    fn read(&mut self) -> Result<(), EditorError> {
+    fn read(&mut self) -> Result<(), EditorError<P::Error>> {
         self.orig_content = match self.tree.get_file_text(&self.path) {
             Ok(c) => Some(c),
             Err(BrzError::NoSuchFile(..)) => None,
             Err(e) => return Err(e.into()),
         };
         self.parsed = match self.orig_content.as_deref() {
-            Some(content) => Some(P::from_bytes(content)),
+            Some(content) => Some(P::from_bytes(content).map_err(EditorError::MarshallingError)?),
             None => Some(P::empty()),
         };
         self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
@@ -609,7 +628,7 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<Self, EditorError> {
+    ) -> Result<Self, EditorError<P::Error>> {
         assert!(path.is_relative());
         let mut ret = Self {
             tree,
@@ -632,14 +651,21 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
     }
 
     fn updated_content(&self) -> Option<Vec<u8>> {
-        self.parsed.as_ref().unwrap().to_bytes()
+        let bytes = self.parsed.as_ref().unwrap().to_bytes();
+        if let Some(ref b) = bytes {
+            eprintln!(
+                "DEBUG TreeEditor::updated_content() returning {} bytes",
+                b.len()
+            );
+        }
+        bytes
     }
 
     fn rewritten_content(&self) -> Option<&[u8]> {
         self.rewritten_content.as_deref()
     }
 
-    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError<P::Error>> {
         let updated_content = self.updated_content();
 
         let changed = tree_edit_formatted_file(
@@ -669,7 +695,7 @@ impl<P: Marshallable> Editor<P> for TreeEditor<'_, P> {
         }
     }
 
-    fn revert(&mut self) -> Result<(), EditorError> {
+    fn revert(&mut self) -> Result<(), EditorError<P::Error>> {
         if let Some(base) = &self.parsed_base {
             self.parsed = Some(base.snapshot());
         }
@@ -708,7 +734,7 @@ impl<P: Marshallable> FsEditor<P> {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: Option<bool>,
-    ) -> Result<Self, EditorError> {
+    ) -> Result<Self, EditorError<P::Error>> {
         let allow_reformatting = allow_reformatting.unwrap_or_else(|| {
             std::env::var("REFORMATTING").unwrap_or("disallow".to_string()) == "allow"
         });
@@ -717,14 +743,14 @@ impl<P: Marshallable> FsEditor<P> {
     }
 
     /// Read the file contents and parse them
-    fn read(&mut self) -> Result<(), EditorError> {
+    fn read(&mut self) -> Result<(), EditorError<P::Error>> {
         self.orig_content = match std::fs::read(&self.path) {
             Ok(c) => Some(c),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
             Err(e) => return Err(e.into()),
         };
         self.parsed = match self.orig_content.as_deref() {
-            Some(content) => Some(P::from_bytes(content)),
+            Some(content) => Some(P::from_bytes(content).map_err(EditorError::MarshallingError)?),
             None => Some(P::empty()),
         };
         self.parsed_base = self.parsed.as_ref().map(|p| p.snapshot());
@@ -737,7 +763,7 @@ impl<P: Marshallable> FsEditor<P> {
         path: &std::path::Path,
         allow_generated: bool,
         allow_reformatting: bool,
-    ) -> Result<Self, EditorError> {
+    ) -> Result<Self, EditorError<P::Error>> {
         let mut ret = Self {
             path: path.to_path_buf(),
             orig_content: None,
@@ -758,7 +784,14 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
     }
 
     fn updated_content(&self) -> Option<Vec<u8>> {
-        self.parsed.as_ref().unwrap().to_bytes()
+        let bytes = self.parsed.as_ref().unwrap().to_bytes();
+        if let Some(ref b) = bytes {
+            eprintln!(
+                "DEBUG FsEditor::updated_content() returning {} bytes",
+                b.len()
+            );
+        }
+        bytes
     }
 
     fn rewritten_content(&self) -> Option<&[u8]> {
@@ -773,7 +806,7 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
         }
     }
 
-    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError<P::Error>> {
         let updated_content = self.updated_content();
 
         let changed = edit_formatted_file(
@@ -794,7 +827,7 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
         }
     }
 
-    fn revert(&mut self) -> Result<(), EditorError> {
+    fn revert(&mut self) -> Result<(), EditorError<P::Error>> {
         if let Some(base) = &self.parsed_base {
             self.parsed = Some(base.snapshot());
         }
@@ -803,10 +836,11 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
 }
 
 impl Marshallable for debian_control::Control {
-    fn from_bytes(content: &[u8]) -> Self {
+    type Error = deb822_lossless::Error;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
         debian_control::Control::read_relaxed(std::io::Cursor::new(content))
-            .unwrap()
-            .0
+            .map(|(control, _)| control)
     }
 
     fn empty() -> Self {
@@ -827,32 +861,11 @@ impl Marshallable for debian_control::Control {
     }
 }
 
-impl Marshallable for debian_control::lossy::Control {
-    fn from_bytes(content: &[u8]) -> Self {
-        use std::str::FromStr;
-        debian_control::lossy::Control::from_str(std::str::from_utf8(content).unwrap()).unwrap()
-    }
-
-    fn empty() -> Self {
-        debian_control::lossy::Control::new()
-    }
-
-    fn to_bytes(&self) -> Option<Vec<u8>> {
-        Some(self.to_string().into_bytes())
-    }
-
-    fn snapshot(&self) -> Self {
-        self.clone()
-    }
-
-    fn has_changed(&self, other: &Self) -> bool {
-        self != other
-    }
-}
-
 impl Marshallable for debian_changelog::ChangeLog {
-    fn from_bytes(content: &[u8]) -> Self {
-        debian_changelog::ChangeLog::read_relaxed(std::io::Cursor::new(content)).unwrap()
+    type Error = debian_changelog::Error;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
+        debian_changelog::ChangeLog::read_relaxed(std::io::Cursor::new(content))
     }
 
     fn empty() -> Self {
@@ -873,12 +886,11 @@ impl Marshallable for debian_changelog::ChangeLog {
 }
 
 impl Marshallable for debian_copyright::lossless::Copyright {
-    fn from_bytes(content: &[u8]) -> Self {
-        debian_copyright::lossless::Copyright::from_str_relaxed(
-            std::str::from_utf8(content).unwrap(),
-        )
-        .unwrap()
-        .0
+    type Error = debian_copyright::lossless::Error;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
+        let s = std::str::from_utf8(content).unwrap();
+        debian_copyright::lossless::Copyright::from_str_relaxed(s).map(|(copyright, _)| copyright)
     }
 
     fn empty() -> Self {
@@ -886,7 +898,16 @@ impl Marshallable for debian_copyright::lossless::Copyright {
     }
 
     fn to_bytes(&self) -> Option<Vec<u8>> {
-        Some(self.to_string().into_bytes())
+        eprintln!(
+            "DEBUG Copyright::to_bytes() - license paragraphs count: {}",
+            self.iter_licenses().count()
+        );
+        let s = self.to_string();
+        eprintln!(
+            "DEBUG Copyright::to_bytes() - serialized length: {} bytes",
+            s.len()
+        );
+        Some(s.into_bytes())
     }
 
     fn snapshot(&self) -> Self {
@@ -899,8 +920,10 @@ impl Marshallable for debian_copyright::lossless::Copyright {
 }
 
 impl Marshallable for makefile_lossless::Makefile {
-    fn from_bytes(content: &[u8]) -> Self {
-        makefile_lossless::Makefile::read_relaxed(std::io::Cursor::new(content)).unwrap()
+    type Error = makefile_lossless::Error;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
+        makefile_lossless::Makefile::read_relaxed(std::io::Cursor::new(content))
     }
 
     fn empty() -> Self {
@@ -921,10 +944,12 @@ impl Marshallable for makefile_lossless::Makefile {
 }
 
 impl Marshallable for deb822_lossless::Deb822 {
-    fn from_bytes(content: &[u8]) -> Self {
+    type Error = deb822_lossless::Error;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
         deb822_lossless::Deb822::read_relaxed(std::io::Cursor::new(content))
-            .unwrap()
-            .0
+            .map(|(deb822, _)| deb822)
+            .map_err(deb822_lossless::Error::from)
     }
 
     fn empty() -> Self {
@@ -945,10 +970,12 @@ impl Marshallable for deb822_lossless::Deb822 {
 }
 
 impl Marshallable for crate::maintscripts::Maintscript {
-    fn from_bytes(content: &[u8]) -> Self {
+    type Error = crate::maintscripts::ParseError;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
         use std::str::FromStr;
         let content = std::str::from_utf8(content).unwrap();
-        crate::maintscripts::Maintscript::from_str(content).unwrap()
+        crate::maintscripts::Maintscript::from_str(content)
     }
 
     fn empty() -> Self {
@@ -973,10 +1000,11 @@ impl Marshallable for crate::maintscripts::Maintscript {
 }
 
 impl Marshallable for debian_watch::WatchFile {
-    fn from_bytes(content: &[u8]) -> Self {
-        use std::str::FromStr;
+    type Error = std::convert::Infallible;
+
+    fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
         let content = std::str::from_utf8(content).unwrap();
-        debian_watch::WatchFile::from_str(content).unwrap()
+        Ok(debian_watch::WatchFile::from_str_relaxed(content))
     }
 
     fn empty() -> Self {
@@ -1106,7 +1134,7 @@ mod tests {
     fn test_unchanged() {
         let td = tempfile::tempdir().unwrap();
         std::fs::write(td.path().join("a"), "some content\n").unwrap();
-        assert!(!edit_formatted_file(
+        assert!(!edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n".as_bytes()),
             Some("some content reformatted\n".as_bytes()),
@@ -1115,7 +1143,7 @@ mod tests {
             false
         )
         .unwrap());
-        assert!(!edit_formatted_file(
+        assert!(!edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n".as_bytes()),
             Some("some content\n".as_bytes()),
@@ -1124,7 +1152,7 @@ mod tests {
             false
         )
         .unwrap());
-        assert!(!edit_formatted_file(
+        assert!(!edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n".as_bytes()),
             Some("some content reformatted\n".as_bytes()),
@@ -1139,7 +1167,7 @@ mod tests {
     fn test_changed() {
         let td = tempfile::tempdir().unwrap();
         std::fs::write(td.path().join("a"), "some content\n").unwrap();
-        assert!(edit_formatted_file(
+        assert!(edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n".as_bytes()),
             Some("some content\n".as_bytes()),
@@ -1158,7 +1186,7 @@ mod tests {
     fn test_unformattable() {
         let td = tempfile::tempdir().unwrap();
         assert!(matches!(
-            edit_formatted_file(
+            edit_formatted_file::<std::convert::Infallible>(
                 &td.path().join("a"),
                 Some(b"some content\n"),
                 Some(b"reformatted content\n"),
@@ -1194,9 +1222,12 @@ mod tests {
     }
 
     impl Marshallable for TestMarshall {
-        fn from_bytes(content: &[u8]) -> Self {
-            let data = std::str::from_utf8(content).unwrap().parse().unwrap();
-            Self { data: Some(data) }
+        type Error = std::num::ParseIntError;
+
+        fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
+            let s = std::str::from_utf8(content).unwrap();
+            let data = s.parse()?;
+            Ok(Self { data: Some(data) })
         }
 
         fn empty() -> Self {
@@ -1331,55 +1362,67 @@ mod tests {
         );
     }
 
+    #[derive(Clone, PartialEq, Debug)]
+    struct LossyFormat {
+        lines: Vec<String>,
+    }
+
+    impl Marshallable for LossyFormat {
+        type Error = std::convert::Infallible;
+
+        fn from_bytes(content: &[u8]) -> Result<Self, Self::Error> {
+            let s = std::str::from_utf8(content).unwrap();
+            Ok(LossyFormat {
+                lines: s
+                    .lines()
+                    .filter(|l| !l.starts_with('#'))
+                    .map(|l| l.to_string())
+                    .collect(),
+            })
+        }
+
+        fn empty() -> Self {
+            LossyFormat { lines: vec![] }
+        }
+
+        fn to_bytes(&self) -> Option<Vec<u8>> {
+            Some(self.lines.join("\n").into_bytes())
+        }
+
+        fn snapshot(&self) -> Self {
+            self.clone()
+        }
+
+        fn has_changed(&self, other: &Self) -> bool {
+            self != other
+        }
+    }
+
     #[test]
     fn test_merge3() {
         let td = tempfile::tempdir().unwrap();
-        std::fs::create_dir(td.path().join("debian")).unwrap();
         std::fs::write(
-            td.path().join("debian/control"),
-            r#"Source: blah
-Testsuite: autopkgtest
-
-Package: blah
-Description: Some description
- And there are more lines
- And more lines
-# A comment
-Multi-Arch: foreign
-"#,
+            td.path().join("test.txt"),
+            "line1\nline2\nline3\n# comment\nline4\n",
         )
         .unwrap();
 
-        let mut editor = super::FsEditor::<debian_control::lossy::Control>::new(
-            &td.path().join("debian/control"),
-            false,
-            false,
-        )
-        .unwrap();
-        editor.source.homepage = Some("https://example.com".parse().unwrap());
+        let mut editor =
+            super::FsEditor::<LossyFormat>::new(&td.path().join("test.txt"), false, false).unwrap();
+        editor.lines.insert(0, "line0".to_string());
 
         #[cfg(feature = "merge3")]
         {
             editor.commit().unwrap();
             assert_eq!(
-                r#"Source: blah
-Homepage: https://example.com/
-Testsuite: autopkgtest
-
-Package: blah
-Multi-Arch: foreign
-Description: Some description
- And there are more lines
- And more lines
-"#,
-                editor.to_string()
+                "line0\nline1\nline2\nline3\n# comment\nline4\n",
+                std::fs::read_to_string(td.path().join("test.txt")).unwrap()
             );
         }
         #[cfg(not(feature = "merge3"))]
         {
             let result = editor.commit();
-            let updated_content =
-                std::fs::read_to_string(td.path().join("debian/control")).unwrap();
+            let updated_content = std::fs::read_to_string(td.path().join("test.txt")).unwrap();
             assert!(result.is_err(), "{:?}", updated_content);
             assert!(
                 matches!(
@@ -1390,19 +1433,7 @@ Description: Some description
                 result,
                 updated_content
             );
-            assert_eq!(
-                r#"Source: blah
-Testsuite: autopkgtest
-
-Package: blah
-Description: Some description
- And there are more lines
- And more lines
-# A comment
-Multi-Arch: foreign
-"#,
-                updated_content
-            );
+            assert_eq!("line1\nline2\nline3\n# comment\nline4\n", updated_content);
         }
     }
 
@@ -1472,7 +1503,7 @@ Multi-Arch: foreign
     fn test_edit_formatted_file_preservable() {
         let td = tempfile::tempdir().unwrap();
         std::fs::write(td.path().join("a"), "some content\n").unwrap();
-        assert!(edit_formatted_file(
+        assert!(edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n".as_bytes()),
             Some("some content\n".as_bytes()),
@@ -1492,7 +1523,7 @@ Multi-Arch: foreign
         let td = tempfile::tempdir().unwrap();
         std::fs::write(td.path().join("a"), "some content\n#extra\n").unwrap();
         assert!(matches!(
-            edit_formatted_file(
+            edit_formatted_file::<std::convert::Infallible>(
                 &td.path().join("a"),
                 Some("some content\n#extra\n".as_bytes()),
                 Some("some content\n".as_bytes()),
@@ -1514,7 +1545,7 @@ Multi-Arch: foreign
     fn test_edit_formatted_file_not_preservable_allowed() {
         let td = tempfile::tempdir().unwrap();
         std::fs::write(td.path().join("a"), "some content\n").unwrap();
-        assert!(edit_formatted_file(
+        assert!(edit_formatted_file::<std::convert::Infallible>(
             &td.path().join("a"),
             Some("some content\n#extra\n".as_bytes()),
             Some("some content\n".as_bytes()),
