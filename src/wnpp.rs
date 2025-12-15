@@ -87,9 +87,9 @@ impl DebBugs {
         source_name: &str,
     ) -> Result<Vec<(BugId, BugKind)>, Error> {
         sqlx::query_as::<_, (BugId, BugKind)>(
-            "select id, substring(title, 1, 3) from archived_bugs where package = 'wnpp' and
+            "select id, substring(title, 1, 3) from archived_bugs where package = 'wnpp' and (
             title like 'ITP: ' || $1 || ' -- %' OR
-            title like 'RFP: ' || $1 || ' -- %'",
+            title like 'RFP: ' || $1 || ' -- %')",
         )
         .bind(source_name)
         .fetch_all(&self.pool)
