@@ -807,7 +807,7 @@ impl TemplatedControlEditor {
     }
 
     /// Commit the changes to the control file and template.
-    pub fn commit(&self) -> Result<Vec<PathBuf>, EditorError> {
+    pub fn commit(&mut self) -> Result<Vec<PathBuf>, EditorError> {
         let mut changed_files: Vec<PathBuf> = vec![];
         if self.template_only {
             // Remove the control file if it exists.
@@ -959,8 +959,12 @@ impl Editor<debian_control::Control> for TemplatedControlEditor {
         self.primary.is_generated()
     }
 
-    fn commit(&self) -> Result<Vec<std::path::PathBuf>, EditorError> {
+    fn commit(&mut self) -> Result<Vec<std::path::PathBuf>, EditorError> {
         TemplatedControlEditor::commit(self)
+    }
+
+    fn revert(&mut self) -> Result<(), EditorError> {
+        self.primary.revert()
     }
 }
 
@@ -1578,7 +1582,7 @@ Testsuite: autopkgtest
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor.source().unwrap().set_name("foo");
             let changes = editor.changes();
@@ -1647,7 +1651,7 @@ Description: Some description
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             let binaries = editor.binaries().collect::<Vec<_>>();
             assert_eq!(binaries.len(), 1);
@@ -1668,7 +1672,7 @@ Package: bar
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             assert!(editor.source().is_none());
         }
@@ -1702,7 +1706,7 @@ Testsuite: autopkgtest
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             assert_eq!(editor.commit().unwrap(), Vec::<&std::path::Path>::new());
         }
@@ -1720,7 +1724,7 @@ Testsuite: autopkgtest
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()
@@ -1753,7 +1757,7 @@ Testsuite: autopkgtest
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()
@@ -1867,7 +1871,7 @@ Section: extra
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             let mut binary = editor
                 .binaries()
@@ -1901,7 +1905,7 @@ Testsuite: autopkgtest
 "#,
             )
             .unwrap();
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor.commit().unwrap();
 
@@ -1957,7 +1961,7 @@ debian/control: debian/control.in
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()
@@ -2023,7 +2027,7 @@ debian/control: debian/control.in
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()
@@ -2087,7 +2091,7 @@ debian/control: debian/control.in
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()
@@ -2138,7 +2142,7 @@ Build-Depends: @cdbs@, libc6
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
 
             editor
@@ -2205,7 +2209,7 @@ Description: foo
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .binaries()
@@ -2244,7 +2248,7 @@ Build-Depends:
             )
             .unwrap();
 
-            let editor =
+            let mut editor =
                 super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
             editor
                 .source()

@@ -13,7 +13,7 @@ pub trait AbstractControlEditor {
     fn binaries<'a>(&'a mut self) -> Vec<Box<dyn AbstractBinary + 'a>>;
 
     /// Commit the changes.
-    fn commit(&self) -> bool;
+    fn commit(&mut self) -> bool;
 
     /// Wrap and sort the control file.
     fn wrap_and_sort(&mut self);
@@ -60,7 +60,7 @@ impl AbstractControlEditor for DebcargoEditor {
             .collect()
     }
 
-    fn commit(&self) -> bool {
+    fn commit(&mut self) -> bool {
         DebcargoEditor::commit(self).unwrap()
     }
 
@@ -161,8 +161,8 @@ impl<E: crate::editor::Editor<PlainControl>> AbstractControlEditor for E {
             .collect()
     }
 
-    fn commit(&self) -> bool {
-        !(self as &dyn crate::editor::Editor<PlainControl>)
+    fn commit(&mut self) -> bool {
+        !(self as &mut dyn crate::editor::Editor<PlainControl>)
             .commit()
             .unwrap()
             .is_empty()
@@ -231,7 +231,7 @@ edition = "2018"
         tree.add(&[(Path::new("debian")), (Path::new("debian/debcargo.toml"))])
             .unwrap();
 
-        let editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
 
         editor.commit();
     }
@@ -259,7 +259,7 @@ Description: Example package
         tree.add(&[(Path::new("debian")), (Path::new("debian/control"))])
             .unwrap();
 
-        let editor = super::edit_control(&tree, Path::new("")).unwrap();
+        let mut editor = super::edit_control(&tree, Path::new("")).unwrap();
 
         editor.commit();
     }
