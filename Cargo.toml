@@ -40,7 +40,7 @@ toml_edit = ">=0.23, <0.26"
 semver = "1"
 sqlx = { version = ">=0.8, <0.9", optional = true, features = ["postgres"] }
 filetime = "0.2.10"
-sha1 = "0.10.6"
+sha1 = "0.11.0"
 hex = "0.4.3"
 svp-client = { version = "0.2.0", optional = true }
 regex = "1.12.2"
