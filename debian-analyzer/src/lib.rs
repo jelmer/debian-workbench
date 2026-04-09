@@ -14,4 +14,6 @@ pub mod transition;
 #[cfg(feature = "udd")]
 pub mod udd;
 #[cfg(feature = "udd")]
+pub mod vcswatch;
+#[cfg(feature = "udd")]
 pub mod wnpp;
