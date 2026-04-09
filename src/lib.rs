@@ -30,6 +30,8 @@ pub mod transition;
 #[cfg(feature = "udd")]
 pub mod debbugs;
 #[cfg(feature = "udd")]
+pub mod maintainers;
+#[cfg(feature = "udd")]
 pub mod popcon;
 #[cfg(feature = "udd")]
 pub mod rdeps;
