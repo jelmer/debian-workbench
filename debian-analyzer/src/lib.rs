@@ -2,6 +2,8 @@
 #![deny(missing_docs)]
 
 pub mod benfile;
+#[cfg(feature = "udd")]
+pub mod debbugs;
 pub mod debhelper;
 pub mod key_package_versions;
 #[cfg(feature = "udd")]
