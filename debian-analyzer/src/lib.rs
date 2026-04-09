@@ -6,6 +6,8 @@ pub mod debhelper;
 pub mod key_package_versions;
 #[cfg(feature = "udd")]
 pub mod popcon;
+#[cfg(feature = "udd")]
+pub mod rdeps;
 pub mod salsa;
 pub mod snapshot;
 pub mod transition;
