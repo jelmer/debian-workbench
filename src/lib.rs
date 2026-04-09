@@ -28,6 +28,8 @@ pub mod salsa;
 pub mod snapshot;
 pub mod transition;
 #[cfg(feature = "udd")]
+pub mod popcon;
+#[cfg(feature = "udd")]
 pub mod udd;
 pub mod vcs;
 pub mod vendor;
