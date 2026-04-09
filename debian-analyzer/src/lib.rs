@@ -7,6 +7,8 @@ pub mod debbugs;
 pub mod debhelper;
 pub mod key_package_versions;
 #[cfg(feature = "udd")]
+pub mod maintainers;
+#[cfg(feature = "udd")]
 pub mod popcon;
 #[cfg(feature = "udd")]
 pub mod rdeps;
