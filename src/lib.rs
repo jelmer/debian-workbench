@@ -8,6 +8,7 @@ use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
 
 pub mod abstract_control;
+pub mod architecture;
 pub mod benfile;
 pub mod changelog;
 pub mod config;
