@@ -12,7 +12,6 @@ use breezyshim::workspace::reset_tree_with_dirty_tracker;
 use pyo3::prelude::*;
 
 pub mod abstract_control;
-pub mod benfile;
 pub mod changelog;
 pub mod config;
 pub mod control;
@@ -28,16 +27,9 @@ pub mod publish;
 pub mod relations;
 pub mod release_info;
 pub mod rules;
-pub mod salsa;
-pub mod snapshot;
-pub mod transition;
-#[cfg(feature = "udd")]
-pub mod udd;
 pub mod vcs;
 pub mod vendor;
 pub mod versions;
-#[cfg(feature = "udd")]
-pub mod wnpp;
 
 // TODO(jelmer): Import this from ognibuild
 /// Default builder

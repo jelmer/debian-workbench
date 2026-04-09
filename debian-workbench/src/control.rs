@@ -617,7 +617,7 @@ fn find_template_path(path: &Path) -> Option<PathBuf> {
 ///
 /// ```rust
 /// use std::path::Path;
-/// use debian_analyzer::control::TemplatedControlEditor;
+/// use debian_workbench::control::TemplatedControlEditor;
 /// let td = tempfile::tempdir().unwrap();
 /// let mut editor = TemplatedControlEditor::create(td.path().join("control")).unwrap();
 /// editor.add_source("foo").set_architecture(Some("all"));
@@ -2271,6 +2271,155 @@ Build-Depends:
  debhelper-compat (= 12),
  uuid-dev
 
+"#,
+                std::fs::read_to_string(td.path().join("debian/control")).unwrap()
+            );
+        }
+
+        #[test]
+        fn test_control_clone_behavior() {
+            use std::io::Cursor;
+
+            let content = b"Source: test\nMaintainer: Joe <joe@example.com>\n";
+            let (control1, _) =
+                debian_control::Control::read_relaxed(Cursor::new(content)).unwrap();
+            let control2 = control1.clone();
+
+            println!(
+                "control1 name before: {:?}",
+                control1.source().unwrap().name()
+            );
+            println!(
+                "control2 name before: {:?}",
+                control2.source().unwrap().name()
+            );
+
+            // Modify control2
+            control2.source().unwrap().set_name("changed");
+
+            println!(
+                "control1 name after: {:?}",
+                control1.source().unwrap().name()
+            );
+            println!(
+                "control2 name after: {:?}",
+                control2.source().unwrap().name()
+            );
+
+            // If clone is deep, control1 should still be "test"
+            // If clone is shallow, both will be "changed"
+        }
+
+        #[test]
+        fn test_revert_before_commit() {
+            use crate::editor::Editor;
+
+            let td = tempfile::tempdir().unwrap();
+            std::fs::create_dir(td.path().join("debian")).unwrap();
+            std::fs::write(
+                td.path().join("debian/control"),
+                r#"Source: blah
+Maintainer: Joe Developer <joe@example.com>
+
+Package: blah
+Architecture: any
+Description: Some package
+"#,
+            )
+            .unwrap();
+
+            let mut editor =
+                super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
+
+            // Verify original state
+            assert_eq!(editor.source().unwrap().name(), Some("blah".to_string()));
+            assert!(!editor.has_changed());
+
+            // Make a change
+            editor.source().unwrap().set_name("newname");
+            assert_eq!(editor.source().unwrap().name(), Some("newname".to_string()));
+            assert!(editor.has_changed());
+
+            // Revert the change
+            editor.revert().unwrap();
+            assert_eq!(editor.source().unwrap().name(), Some("blah".to_string()));
+            assert!(!editor.has_changed());
+
+            // File should not have changed
+            assert_eq!(
+                r#"Source: blah
+Maintainer: Joe Developer <joe@example.com>
+
+Package: blah
+Architecture: any
+Description: Some package
+"#,
+                std::fs::read_to_string(td.path().join("debian/control")).unwrap()
+            );
+        }
+
+        #[test]
+        fn test_revert_after_commit() {
+            use crate::editor::Editor;
+
+            let td = tempfile::tempdir().unwrap();
+            std::fs::create_dir(td.path().join("debian")).unwrap();
+            std::fs::write(
+                td.path().join("debian/control"),
+                r#"Source: blah
+Maintainer: Joe Developer <joe@example.com>
+
+Package: blah
+Architecture: any
+Description: Some package
+"#,
+            )
+            .unwrap();
+
+            let mut editor =
+                super::TemplatedControlEditor::open(td.path().join("debian/control")).unwrap();
+
+            // Make a change and commit
+            editor.source().unwrap().set_name("newname");
+            assert!(editor.has_changed());
+            editor.commit().unwrap();
+            assert!(!editor.has_changed());
+            assert_eq!(editor.source().unwrap().name(), Some("newname".to_string()));
+
+            // Verify the file was updated
+            let content = std::fs::read_to_string(td.path().join("debian/control")).unwrap();
+            assert_eq!(
+                r#"Source: newname
+Maintainer: Joe Developer <joe@example.com>
+
+Package: blah
+Architecture: any
+Description: Some package
+"#,
+                content
+            );
+
+            // Make another change
+            editor.source().unwrap().set_name("thirdname");
+            assert_eq!(
+                editor.source().unwrap().name(),
+                Some("thirdname".to_string())
+            );
+            assert!(editor.has_changed());
+
+            // Revert should go back to committed state (newname, not original blah)
+            editor.revert().unwrap();
+            assert_eq!(editor.source().unwrap().name(), Some("newname".to_string()));
+            assert!(!editor.has_changed());
+
+            // File should still have committed content
+            assert_eq!(
+                r#"Source: newname
+Maintainer: Joe Developer <joe@example.com>
+
+Package: blah
+Architecture: any
+Description: Some package
 "#,
                 std::fs::read_to_string(td.path().join("debian/control")).unwrap()
             );

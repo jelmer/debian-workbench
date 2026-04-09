@@ -176,11 +176,17 @@ mod tests {
         let debbugs = DebBugs::default().await.expect("Failed to connect to UDD");
 
         // Query archived bugs
-        let result = debbugs.find_archived_wnpp_bugs("nonexistent-package-12345").await;
+        let result = debbugs
+            .find_archived_wnpp_bugs("nonexistent-package-12345")
+            .await;
 
         // Even if no bugs are found, the query should succeed
         assert!(result.is_ok(), "Archived query failed: {:?}", result);
         let bugs = result.unwrap();
-        assert_eq!(bugs.len(), 0, "Should find no archived bugs for nonexistent package");
+        assert_eq!(
+            bugs.len(),
+            0,
+            "Should find no archived bugs for nonexistent package"
+        );
     }
 }

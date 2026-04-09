@@ -839,7 +839,7 @@ impl Marshallable for debian_control::Control {
     }
 
     fn snapshot(&self) -> Self {
-        self.clone()
+        debian_control::Control::snapshot(self)
     }
 
     fn has_changed(&self, other: &Self) -> bool {
@@ -1682,5 +1682,89 @@ mod tests {
         editor.revert().unwrap();
         assert_eq!(editor.get_data(), Some(2));
         assert!(!editor.has_changed());
+    }
+
+    #[test]
+    fn test_watchfile_editor() {
+        let td = tempfile::tempdir().unwrap();
+        let watch_path = td.path().join("debian/watch");
+        std::fs::create_dir_all(watch_path.parent().unwrap()).unwrap();
+
+        // Create a basic watch file
+        std::fs::write(
+            &watch_path,
+            "version=4\nhttps://example.com/downloads example-(.*)\\.tar\\.gz\n",
+        )
+        .unwrap();
+
+        // Test that we can read and edit the watch file
+        let mut editor =
+            FsEditor::<debian_watch::WatchFile>::new(&watch_path, false, false).unwrap();
+
+        // Verify we can read the watch file
+        assert_eq!(editor.version(), 4);
+        let entries: Vec<_> = editor.entries().collect();
+        assert_eq!(entries.len(), 1);
+        assert_eq!(entries[0].url(), "https://example.com/downloads");
+        assert_eq!(
+            entries[0].matching_pattern(),
+            Some("example-(.*)\\.tar\\.gz".to_string())
+        );
+
+        // Make a change
+        let entry = debian_watch::EntryBuilder::new("https://example.com/other")
+            .matching_pattern("other-(.*)\\.tar\\.gz")
+            .build();
+        editor.add_entry(entry);
+
+        let entries: Vec<_> = editor.entries().collect();
+        assert_eq!(entries.len(), 2);
+        assert_eq!(entries[0].url(), "https://example.com/downloads");
+        assert_eq!(entries[1].url(), "https://example.com/other");
+        assert_eq!(
+            entries[1].matching_pattern(),
+            Some("other-(.*)\\.tar\\.gz".to_string())
+        );
+        assert!(editor.has_changed());
+
+        // Commit the changes
+        let changed_files = editor.commit().unwrap();
+        assert_eq!(changed_files, vec![watch_path.clone()]);
+        assert!(!editor.has_changed());
+
+        // Verify the file was updated
+        let content = std::fs::read_to_string(&watch_path).unwrap();
+        let expected = "version=4\nhttps://example.com/downloads example-(.*)\\.tar\\.gz\nhttps://example.com/other other-(.*)\\.tar\\.gz\n";
+        assert_eq!(content, expected);
+    }
+
+    #[test]
+    fn test_marshalling_error_handling() {
+        let td = tempfile::tempdir().unwrap();
+        let test_path = td.path().join("test");
+
+        // Write invalid content that will fail to parse as an integer
+        std::fs::write(&test_path, "not a number").unwrap();
+
+        // Attempt to create an editor should fail with a marshalling error
+        let result = FsEditor::<TestMarshall>::new(&test_path, false, false);
+        assert!(matches!(result, Err(EditorError::MarshallingError(_))));
+    }
+
+    #[test]
+    fn test_tree_editor_marshalling_error() {
+        use breezyshim::controldir::{create_standalone_workingtree, ControlDirFormat};
+        let tempdir = tempfile::tempdir().unwrap();
+
+        let tree =
+            create_standalone_workingtree(tempdir.path(), &ControlDirFormat::default()).unwrap();
+
+        // Put invalid content in the tree
+        tree.put_file_bytes_non_atomic(std::path::Path::new("test"), b"invalid content")
+            .unwrap();
+
+        // Attempt to create an editor should fail with a marshalling error
+        let result = tree.edit_file::<TestMarshall>(std::path::Path::new("test"), false, false);
+        assert!(matches!(result, Err(EditorError::MarshallingError(_))));
     }
 }
