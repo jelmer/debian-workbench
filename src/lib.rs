@@ -33,6 +33,8 @@ pub mod popcon;
 pub mod rdeps;
 #[cfg(feature = "udd")]
 pub mod udd;
+#[cfg(feature = "udd")]
+pub mod vcswatch;
 pub mod vcs;
 pub mod vendor;
 pub mod versions;
