@@ -4,6 +4,8 @@
 pub mod benfile;
 pub mod debhelper;
 pub mod key_package_versions;
+#[cfg(feature = "udd")]
+pub mod popcon;
 pub mod salsa;
 pub mod snapshot;
 pub mod transition;
