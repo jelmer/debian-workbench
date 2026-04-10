@@ -8,6 +8,7 @@ use breezyshim::workingtree::PyWorkingTree;
 use breezyshim::workspace::reset_tree_with_dirty_tracker;
 
 pub mod abstract_control;
+pub mod architecture;
 pub mod benfile;
 pub mod changelog;
 pub mod config;
@@ -28,7 +29,17 @@ pub mod salsa;
 pub mod snapshot;
 pub mod transition;
 #[cfg(feature = "udd")]
+pub mod debbugs;
+#[cfg(feature = "udd")]
+pub mod maintainers;
+#[cfg(feature = "udd")]
+pub mod popcon;
+#[cfg(feature = "udd")]
+pub mod rdeps;
+#[cfg(feature = "udd")]
 pub mod udd;
+#[cfg(feature = "udd")]
+pub mod vcswatch;
 pub mod vcs;
 pub mod vendor;
 pub mod versions;

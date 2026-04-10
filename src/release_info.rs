@@ -185,6 +185,91 @@ pub fn resolve_release_codename(name: &str, date: Option<NaiveDate>) -> Option<S
     None
 }
 
+/// Get all known Debian distribution names (aliases + codenames).
+///
+/// Includes fixed aliases (`unstable`, `stable`, `testing`, `oldstable`,
+/// `experimental`, `sid`, `UNRELEASED`) plus all codenames from
+/// distro-info-data when available.
+pub fn get_all_debian_distributions() -> Vec<String> {
+    let mut distributions = vec![
+        "unstable".to_string(),
+        "stable".to_string(),
+        "testing".to_string(),
+        "oldstable".to_string(),
+        "experimental".to_string(),
+        "sid".to_string(),
+        "UNRELEASED".to_string(),
+    ];
+
+    if let Ok(debian_info) = distro_info::DebianDistroInfo::new() {
+        for release in debian_info.iter() {
+            let series = release.series().to_string();
+            if !distributions.contains(&series) {
+                distributions.push(series);
+            }
+        }
+    }
+
+    distributions
+}
+
+/// Map a Debian distribution alias to its codename or vice versa at the
+/// given date.
+///
+/// Returns `None` if there is no mapping (e.g. the distribution is
+/// unambiguous, or distro-info data is unavailable).
+///
+/// Examples:
+/// - `"unstable"` → `Some("sid")`
+/// - `"sid"` → `Some("unstable")`
+/// - `"testing"` → `Some("forky")` (current testing codename)
+/// - `"trixie"` → `Some("stable")` (if trixie is the current stable)
+/// - `"experimental"` → `None`
+pub fn get_suite_mapping(distribution: &str, date: Option<NaiveDate>) -> Option<String> {
+    let date = date.unwrap_or_else(|| Utc::now().naive_utc().date());
+
+    match distribution {
+        "unstable" => Some("sid".to_string()),
+        "sid" => Some("unstable".to_string()),
+        "experimental" | "UNRELEASED" => None,
+        "testing" | "stable" | "oldstable" => {
+            resolve_release_codename(distribution, Some(date))
+        }
+        codename => {
+            // Check if this codename currently maps to an alias
+            let Ok(debian_info) = distro_info::DebianDistroInfo::new() else {
+                return None;
+            };
+
+            let mut released: Vec<_> = debian_info
+                .all_at(date)
+                .into_iter()
+                .filter(|r| r.release().is_some())
+                .collect();
+            released.sort_by_key(|r| r.created());
+            released.reverse();
+
+            if released.first().is_some_and(|r| r.series() == codename) {
+                return Some("stable".to_string());
+            }
+            if released.get(1).is_some_and(|r| r.series() == codename) {
+                return Some("oldstable".to_string());
+            }
+
+            // Check testing
+            let testing = debian_info
+                .all_at(date)
+                .into_iter()
+                .find(|r| r.version().is_some() && r.release().is_none());
+            if testing.is_some_and(|r| r.series() == codename) {
+                return Some("testing".to_string());
+            }
+
+            None
+        }
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/key_package_versions.rs"));
 
 #[cfg(test)]
@@ -243,6 +328,53 @@ mod tests {
     #[test]
     fn test_resolve_ubuntu_esm() {
         assert!(resolve_release_codename("ubuntu/esm", None).is_some())
+    }
+
+    #[test]
+    fn test_get_all_debian_distributions_includes_aliases() {
+        let dists = super::get_all_debian_distributions();
+        assert!(dists.contains(&"unstable".to_string()));
+        assert!(dists.contains(&"stable".to_string()));
+        assert!(dists.contains(&"testing".to_string()));
+        assert!(dists.contains(&"UNRELEASED".to_string()));
+        assert!(dists.contains(&"sid".to_string()));
+    }
+
+    #[test]
+    fn test_suite_mapping_unstable() {
+        assert_eq!(
+            super::get_suite_mapping("unstable", None),
+            Some("sid".to_string())
+        );
+        assert_eq!(
+            super::get_suite_mapping("sid", None),
+            Some("unstable".to_string())
+        );
+    }
+
+    #[test]
+    fn test_suite_mapping_experimental() {
+        assert_eq!(super::get_suite_mapping("experimental", None), None);
+    }
+
+    #[test]
+    fn test_suite_mapping_testing_roundtrip() {
+        if let Some(codename) = super::get_suite_mapping("testing", None) {
+            assert_eq!(
+                super::get_suite_mapping(&codename, None),
+                Some("testing".to_string())
+            );
+        }
+    }
+
+    #[test]
+    fn test_suite_mapping_stable_roundtrip() {
+        if let Some(codename) = super::get_suite_mapping("stable", None) {
+            assert_eq!(
+                super::get_suite_mapping(&codename, None),
+                Some("stable".to_string())
+            );
+        }
     }
 
     #[test]
