@@ -1,11 +1,7 @@
-debian-analyzer
-===============
+debian-workbench workspace
+==========================
 
-This rust crate provides a set of tools to analyze Debian packages and
-make changes to them.
+This repository is a Cargo workspace containing:
 
-It is designed to be used as part of a larger toolchain for making
-changes to Debian packages. One of the key users of it
-is the [Debian Codemods](https://salsa.debian.org/jelmer/debian-codemods)
-project, which uses it to make changes to Debian packages in a
-consistent and automated way.
+- [debian-analyzer](debian-analyzer/) — information about the Debian distribution.
+- [debian-workbench](debian-workbench/) — workbench for editing Debian packages.
