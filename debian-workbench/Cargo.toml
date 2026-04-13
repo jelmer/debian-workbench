@@ -1,6 +1,6 @@
 [package]
 name = "debian-workbench"
-version = "0.160.12"
+version = "0.2.0"
 authors = [ "Jelmer Vernooij <jelmer@jelmer.uk>"]
 edition = "2021"
 license = "GPL-2.0+"
@@ -41,7 +41,7 @@ filetime = "0.2.10"
 svp-client = { version = "0.2.0", optional = true }
 regex = "1.12.2"
 debian-watch = ">=0.2.20, <0.3"
-debian-analyzer = { path = "../debian-analyzer", optional = true }
+debian-analyzer = { path = "../debian-analyzer", version = "0.160", optional = true }
 
 [features]
 svp = ["dep:svp-client"]
