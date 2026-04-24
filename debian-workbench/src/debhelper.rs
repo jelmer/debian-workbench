@@ -73,27 +73,6 @@ pub fn get_debhelper_compat_level(path: &Path) -> Result<Option<u8>, std::io::Er
     }
 }
 
-/// Retrieve the maximum supported debhelper compat version fior a release.
-///
-/// # Arguments
-/// * `compat_release` - A release name (Debian or Ubuntu, currently)
-///
-/// # Returns
-/// The debhelper compat version
-pub fn maximum_debhelper_compat_version(compat_release: &str) -> u8 {
-    crate::release_info::debhelper_versions
-        .get(compat_release)
-        .map(|v| {
-            v.upstream_version
-                .split('.')
-                .next()
-                .unwrap()
-                .parse()
-                .unwrap()
-        })
-        .unwrap_or_else(lowest_non_deprecated_compat_level)
-}
-
 /// Ask dh_assistant for the supported compat levels.
 ///
 /// Cache the result.
@@ -185,7 +164,7 @@ impl std::error::Error for EnsureDebhelperError {}
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::debhelper::ensure_minimum_debhelper_version;
+/// use debian_workbench::debhelper::ensure_minimum_debhelper_version;
 ///
 /// let text = "Source: foo\nBuild-Depends: debhelper (>= 10)\n";
 /// let mut control = debian_control::Control::read_relaxed(text.as_bytes()).unwrap().0;
@@ -270,7 +249,7 @@ pub fn ensure_minimum_debhelper_version(
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::debhelper::get_sequences;
+/// use debian_workbench::debhelper::get_sequences;
 ///
 /// let text = "Source: foo\nBuild-Depends: dh-sequence-python3, dh-sequence-nodejs\n";
 /// let control = debian_control::Control::read_relaxed(text.as_bytes()).unwrap().0;
