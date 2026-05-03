@@ -674,7 +674,7 @@ impl std::error::Error for GbpTagFormatError {}
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::vcs::gbp_expand_tag_name;
+/// use debian_workbench::vcs::gbp_expand_tag_name;
 ///
 /// assert_eq!(
 ///     gbp_expand_tag_name("debian/%(version)s", "1.0-1").unwrap(),

@@ -41,7 +41,7 @@ pub fn dh_invoke_get_with(line: &str) -> Vec<String> {
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::rules::dh_invoke_drop_with;
+/// use debian_workbench::rules::dh_invoke_drop_with;
 /// assert_eq!(
 ///     dh_invoke_drop_with("dh $@ --with=foo,bar", "foo"),
 ///     "dh $@ --with=bar"
@@ -93,7 +93,7 @@ pub fn dh_invoke_drop_with(line: &str, with_argument: &str) -> String {
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::rules::dh_invoke_drop_argument;
+/// use debian_workbench::rules::dh_invoke_drop_argument;
 /// assert_eq!(
 ///     dh_invoke_drop_argument("dh $@ --foo --bar", "--foo"),
 ///     "dh $@ --bar"
@@ -132,7 +132,7 @@ pub fn dh_invoke_drop_argument(line: &str, argument: &str) -> String {
 ///
 /// # Examples
 /// ```rust
-/// use debian_analyzer::rules::dh_invoke_replace_argument;
+/// use debian_workbench::rules::dh_invoke_replace_argument;
 /// assert_eq!(
 ///     dh_invoke_replace_argument("dh $@ --foo", "--foo", "--bar"),
 ///     "dh $@ --bar"
@@ -169,7 +169,7 @@ pub fn dh_invoke_replace_argument(line: &str, old: &str, new: &str) -> String {
 ///
 /// # Examples
 /// ```rust,no_run
-/// use debian_analyzer::rules::check_cdbs;
+/// use debian_workbench::rules::check_cdbs;
 /// use std::path::Path;
 /// assert!(!check_cdbs(Path::new("debian/rules")));
 /// ```

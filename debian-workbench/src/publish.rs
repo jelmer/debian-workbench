@@ -1,7 +1,8 @@
 //! Publishing utilities for updating Vcs-* headers and creating VCS repositories.
-use crate::salsa::guess_repository_url;
+use crate::get_committer;
+#[cfg(feature = "debian")]
+use crate::parseaddr;
 use crate::vcs::determine_browser_url;
-use crate::{get_committer, parseaddr};
 use debian_control::control::Source;
 
 use breezyshim::branch::Branch;
@@ -128,15 +129,22 @@ pub fn update_official_vcs(
         log::debug!("Using existing URL {}", existing);
         return Ok(existing);
     }
-    let maintainer_email = parseaddr(source.maintainer().unwrap().as_str())
-        .unwrap()
-        .1
-        .unwrap();
-    let source_name = source.name().unwrap();
-    let mut repo_url = repo_url.map(|u| u.to_owned());
-    if repo_url.is_none() {
-        repo_url = guess_repository_url(source_name.as_str(), maintainer_email.as_str());
-    }
+    let repo_url = repo_url.map(|u| u.to_owned()).or_else(|| {
+        #[cfg(feature = "debian")]
+        {
+            let maintainer_email = parseaddr(source.maintainer().unwrap().as_str())
+                .unwrap()
+                .1
+                .unwrap();
+            let source_name = source.name().unwrap();
+            return debian_analyzer::salsa::guess_repository_url(
+                source_name.as_str(),
+                maintainer_email.as_str(),
+            );
+        }
+        #[allow(unreachable_code)]
+        None
+    });
     let repo_url = match repo_url {
         Some(url) => url,
         None => {
