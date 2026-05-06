@@ -609,8 +609,7 @@ mod tests {
         use breezyshim::tree::MutableTree;
 
         let td = tempfile::tempdir().unwrap();
-        let tree =
-            create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
         tree.build_commit()
             .message("init")
             .committer("Test <test@example.com>")
