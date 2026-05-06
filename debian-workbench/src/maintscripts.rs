@@ -310,7 +310,10 @@ enum Line {
 impl std::fmt::Display for Line {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         match self {
-            Line::Comment(comment) => write!(f, "# {}", comment),
+            // Comment lines are stored verbatim by FromStr (with their
+            // leading `#` and any blank lines kept as-is); write them back
+            // unchanged.
+            Line::Comment(comment) => write!(f, "{}", comment),
             Line::Entry(entry) => write!(f, "{}", entry),
         }
     }
@@ -350,21 +353,26 @@ impl Maintscript {
             .collect()
     }
 
-    /// Remove an entry from the maintscript file
+    /// Remove the entry at `index` (where `index` is an index into the
+    /// list returned by [`Self::entries`]). Any contiguous comment or
+    /// blank lines immediately preceding the entry are removed too.
     pub fn remove(&mut self, index: usize) {
-        // Also remove preceding comments
-        let mut comments = vec![];
+        let mut comments: Vec<usize> = vec![];
+        let mut entries_seen = 0usize;
         for (i, line) in self.lines.iter().enumerate() {
             match line {
                 Line::Comment(_) => comments.push(i),
                 Line::Entry(_) => {
-                    if i == index {
-                        for i in comments.iter().rev() {
-                            self.lines.remove(*i);
+                    if entries_seen == index {
+                        // Remove preceding comments (in descending index
+                        // order) plus the entry itself.
+                        for c in comments.iter().rev() {
+                            self.lines.remove(*c);
                         }
-                        self.lines.remove(index - comments.len());
+                        self.lines.remove(i - comments.len());
                         return;
                     }
+                    entries_seen += 1;
                     comments.clear();
                 }
             }
@@ -443,5 +451,27 @@ dir_to_symlink /etc/foo /etc/bar 1.2.3-4";
                 },
             ]
         );
+    }
+
+    #[test]
+    fn test_round_trip_preserves_comments() {
+        let original = "# leading comment\nrm_conffile /etc/foo.conf 1.2.3-4\n# trailing comment";
+        let parsed = original.parse::<super::Maintscript>().unwrap();
+        assert_eq!(parsed.to_string(), original);
+    }
+
+    #[test]
+    fn test_round_trip_preserves_blank_lines() {
+        let original = "rm_conffile /etc/foo.conf 1.2.3-4\n\nrm_conffile /etc/bar.conf 1.2.3-4";
+        let parsed = original.parse::<super::Maintscript>().unwrap();
+        assert_eq!(parsed.to_string(), original);
+    }
+
+    #[test]
+    fn test_remove_drops_preceding_comments() {
+        let original = "# comment for foo\nrm_conffile /etc/foo.conf 1.2.3-4\nrm_conffile /etc/bar.conf 1.2.3-4";
+        let mut parsed = original.parse::<super::Maintscript>().unwrap();
+        parsed.remove(0);
+        assert_eq!(parsed.to_string(), "rm_conffile /etc/bar.conf 1.2.3-4");
     }
 }
