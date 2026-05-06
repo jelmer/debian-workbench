@@ -112,7 +112,7 @@ where
             relpaths
                 .iter()
                 .filter_map(|p| {
-                    if local_tree.has_filename(p) && local_tree.is_ignored(p).is_some() {
+                    if local_tree.has_filename(p) && local_tree.is_ignored(p).is_none() {
                         Some(p.as_path())
                     } else {
                         None
@@ -598,5 +598,43 @@ mod tests {
             Some(Certainty::Possible),
             min_certainty(&[Certainty::Likely, Certainty::Certain, Certainty::Possible])
         );
+    }
+
+    #[test]
+    fn test_apply_or_revert_dirty_tracker_adds_new_files() {
+        // With a DirtyTreeTracker active, apply_or_revert must add newly
+        // created (untracked, unignored) files to the working tree.
+        use breezyshim::controldir::{create_standalone_workingtree, ControlDirFormat};
+        use breezyshim::dirty_tracker::DirtyTreeTracker;
+        use breezyshim::tree::MutableTree;
+
+        let td = tempfile::tempdir().unwrap();
+        let tree =
+            create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        tree.build_commit()
+            .message("init")
+            .committer("Test <test@example.com>")
+            .allow_pointless(true)
+            .commit()
+            .unwrap();
+
+        let basis_tree = tree.basis_tree().unwrap();
+        let mut tracker = Some(DirtyTreeTracker::new(Clone::clone(&tree)));
+
+        let lock = tree.lock_write().unwrap();
+        apply_or_revert(
+            &tree,
+            std::path::Path::new(""),
+            &basis_tree,
+            tracker.as_mut(),
+            |basedir| -> Result<(), ()> {
+                std::fs::write(basedir.join("foo"), "bar").unwrap();
+                Ok(())
+            },
+        )
+        .unwrap_or_else(|_| panic!("expected changes for newly created file"));
+        std::mem::drop(lock);
+
+        assert!(tree.is_versioned(std::path::Path::new("foo")));
     }
 }
