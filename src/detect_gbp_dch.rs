@@ -54,7 +54,11 @@ fn gbp_conf_has_dch_section(tree: &dyn Tree, debian_path: &std::path::Path) -> b
             // Treat unreadable gbp.conf the same as missing — no
             // `[dch]` section we can detect. Better than crashing the
             // codemod on a transient IO error.
-            log::warn!("Unexpected error reading {}: {:?}", gbp_conf_path.display(), e);
+            log::warn!(
+                "Unexpected error reading {}: {:?}",
+                gbp_conf_path.display(),
+                e
+            );
             return false;
         }
     };
