@@ -50,13 +50,26 @@ fn gbp_conf_has_dch_section(tree: &dyn Tree, debian_path: &std::path::Path) -> b
     let gbp_conf_text = match tree.get_file_text(gbp_conf_path.as_path()) {
         Ok(text) => text,
         Err(Error::NoSuchFile(_)) => return false,
-        Err(e) => panic!("Unexpected error reading gbp.conf: {:?}", e),
+        Err(e) => {
+            // Treat unreadable gbp.conf the same as missing — no
+            // `[dch]` section we can detect. Better than crashing the
+            // codemod on a transient IO error.
+            log::warn!(
+                "Unexpected error reading {}: {:?}",
+                gbp_conf_path.display(),
+                e
+            );
+            return false;
+        }
     };
 
     let mut parser = configparser::ini::Ini::new();
-    parser
-        .read(String::from_utf8_lossy(gbp_conf_text.as_slice()).to_string())
-        .unwrap();
+    if let Err(e) = parser.read(String::from_utf8_lossy(gbp_conf_text.as_slice()).to_string()) {
+        // Same logic for malformed INI: assume no `[dch]` section
+        // rather than panic.
+        log::warn!("Failed to parse {}: {}", gbp_conf_path.display(), e);
+        return false;
+    }
     parser.sections().contains(&"dch".to_string())
 }
 
@@ -84,14 +97,31 @@ pub fn guess_update_changelog(
     let changelog_path = debian_path.join("changelog");
     if cl.is_none() {
         match tree.get_file(changelog_path.as_path()) {
-            Ok(f) => {
-                cl = Some(ChangeLog::read(f).unwrap());
-            }
+            Ok(f) => match ChangeLog::read(f) {
+                Ok(parsed) => {
+                    cl = Some(parsed);
+                }
+                Err(e) => {
+                    // A debian/changelog whose parser bails (malformed
+                    // version, stray tokens, etc.) shouldn't crash the
+                    // whole codemod — return None so the caller
+                    // treats it as "couldn't guess" rather than
+                    // killing the process. Mirrors how a missing
+                    // changelog is handled below.
+                    log::warn!("Failed to parse {}: {:?}", changelog_path.display(), e);
+                    return None;
+                }
+            },
             Err(Error::NoSuchFile(_)) => {
                 log::debug!("No changelog found");
             }
             Err(e) => {
-                panic!("Unexpected error reading changelog: {:?}", e);
+                log::warn!(
+                    "Unexpected error reading {}: {:?}",
+                    changelog_path.display(),
+                    e
+                );
+                return None;
             }
         }
     }
@@ -226,11 +256,29 @@ fn changelog_stats(
         }
         let cl_path = debian_path.join("changelog");
         if filenames.contains(&cl_path) {
-            let revtree = branch.repository().revision_tree(&rev.revision_id).unwrap();
+            let revtree = match branch.repository().revision_tree(&rev.revision_id) {
+                Ok(t) => t,
+                Err(e) => {
+                    log::warn!(
+                        "Skipping revision {}: cannot open tree: {}",
+                        rev.revision_id,
+                        e
+                    );
+                    continue;
+                }
+            };
             match revtree.get_file_lines(cl_path.as_path()) {
                 Err(Error::NoSuchFile(_p)) => {}
                 Err(e) => {
-                    panic!("Error reading changelog: {}", e);
+                    // Don't panic on a single bad historical
+                    // changelog — skip the revision and keep
+                    // accumulating stats from the rest.
+                    log::warn!(
+                        "Skipping revision {}: error reading changelog: {}",
+                        rev.revision_id,
+                        e
+                    );
+                    continue;
                 }
                 Ok(cl_lines) => {
                     if String::from_utf8_lossy(cl_lines[0].as_slice()).contains("UNRELEASED") {
@@ -444,6 +492,29 @@ pristine-tar = False
                 update_changelog: false,
                 explanation: "Assuming changelog does not need to be updated, since all entries in last changelog entry are prefixed by git shas.".to_string(),
             }),
+            guess_update_changelog(&tree, Path::new("debian"), None)
+        );
+    }
+
+    /// A debian/changelog the parser can't make sense of must not crash
+    /// the whole codemod — return None so the caller treats it as
+    /// "couldn't guess". Reproduces the panic seen on real worker
+    /// failures (`Parse(ParseError([...]))` at line ~88).
+    #[test]
+    fn test_unparseable_changelog_returns_none_not_panic() {
+        let td = tempfile::tempdir().unwrap();
+        let tree = create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+        std::fs::create_dir(td.path().join("debian")).unwrap();
+        // Not a valid changelog header (no "package (version) dist;").
+        std::fs::write(
+            td.path().join("debian/changelog"),
+            "this is not a debian changelog\n  not even close = ?\n",
+        )
+        .unwrap();
+        tree.add(&[Path::new("debian"), Path::new("debian/changelog")])
+            .unwrap();
+        assert_eq!(
+            None,
             guess_update_changelog(&tree, Path::new("debian"), None)
         );
     }
