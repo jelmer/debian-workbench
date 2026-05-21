@@ -42,8 +42,11 @@ pub fn only_changes_last_changelog_block<'a>(
         // Doesn't change the changelog at all
         return Ok(false);
     }
+    // Parse relaxed: this is a structural comparison of the last entry, so a
+    // parse error in old historical entries further down the file must not
+    // make the comparison fail.
     let mut new_cl = match tree.get_file(changelog_path) {
-        Ok(f) => ChangeLog::read(f)?,
+        Ok(f) => ChangeLog::read_relaxed(f)?,
         Err(Error::NoSuchFile(_)) => {
             return Ok(false);
         }
@@ -52,7 +55,7 @@ pub fn only_changes_last_changelog_block<'a>(
         }
     };
     let mut old_cl = match basis_tree.get_file(changelog_path) {
-        Ok(f) => ChangeLog::read(f)?,
+        Ok(f) => ChangeLog::read_relaxed(f)?,
         Err(Error::NoSuchFile(_)) => {
             return Ok(true);
         }
@@ -628,6 +631,67 @@ blah (0.1) unstable; urgency=medium
                 .unwrap();
 
             assert!(!only_changes_last_changelog_block(
+                &tree,
+                &tree.basis_tree().unwrap(),
+                Path::new("debian/changelog"),
+                changes.iter()
+            )
+            .unwrap());
+            std::mem::drop(basis_lock_read);
+            std::mem::drop(lock_read);
+        }
+
+        #[test]
+        fn test_changes_to_last_only_with_old_style_trailing_entries() {
+            // A changelog that ends with pre-1.0 old-style entries does not
+            // parse cleanly under the strict reader. The comparison only cares
+            // about the last block, so such trailing content must not make it
+            // fail.
+            let td = tempfile::tempdir().unwrap();
+            let tree =
+                create_standalone_workingtree(td.path(), &ControlDirFormat::default()).unwrap();
+            std::fs::create_dir_all(td.path().join("debian")).unwrap();
+            let changelog = r###"blah (0.2) UNRELEASED; urgency=medium
+
+  * And a change.
+
+ -- Blah <example@debian.org>  Sat, 13 Oct 2018 11:21:39 +0100
+
+blah (0.1) unstable; urgency=medium
+
+  * Initial release. (Closes: #911016)
+
+ -- Blah <example@debian.org>  Sat, 13 Oct 2018 11:21:39 +0100
+
+0.0.1-1:
+ 19940101
+ * Old-style changelog entry.
+"###;
+            std::fs::write(td.path().join("debian/changelog"), changelog).unwrap();
+            tree.add(&[Path::new("debian"), Path::new("debian/changelog")])
+                .unwrap();
+            tree.build_commit()
+                .message("Initial thingy.")
+                .committer(COMMITTER)
+                .commit()
+                .unwrap();
+            std::fs::write(
+                td.path().join("debian/changelog"),
+                changelog.replace(
+                    "  * And a change.\n",
+                    "  * And a change.\n  * Another change.\n",
+                ),
+            )
+            .unwrap();
+            let basis_tree = tree.basis_tree().unwrap();
+            let lock_read = tree.lock_read();
+            let basis_lock_read = basis_tree.lock_read();
+            let changes = tree
+                .iter_changes(&basis_tree, None, None, None)
+                .unwrap()
+                .collect::<Result<Vec<_>, _>>()
+                .unwrap();
+            assert!(only_changes_last_changelog_block(
                 &tree,
                 &tree.basis_tree().unwrap(),
                 Path::new("debian/changelog"),
