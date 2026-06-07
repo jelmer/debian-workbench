@@ -58,7 +58,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .init();
 
-    breezyshim::init();
+    breezyshim::try_init()?;
 
     let (wt, subpath) = match workingtree::open_containing(&args.directory) {
         Ok((wt, subpath)) => (wt, subpath.display().to_string()),
