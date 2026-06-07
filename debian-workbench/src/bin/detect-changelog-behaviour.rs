@@ -29,7 +29,10 @@ fn main() {
         )
         .init();
 
-    breezyshim::init();
+    if let Err(e) = breezyshim::try_init() {
+        log::error!("Unable to initialize Breezy: {}", e);
+        std::process::exit(1);
+    }
 
     let (wt, subpath) = workingtree::open_containing(&args.directory).unwrap();
     let debian_path = if debian_workbench::control_files_in_root(&wt, subpath.as_path()) {
