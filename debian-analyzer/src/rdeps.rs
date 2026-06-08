@@ -92,9 +92,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_rdeps_count_cached() {
         let mut cache = make_cache();
-        cache
-            .count_by_package
-            .insert("libc6".into(), Some(15000));
+        cache.count_by_package.insert("libc6".into(), Some(15000));
 
         let count = cache.get_rdeps_count("libc6").await;
         assert_eq!(count, Some(15000));

@@ -130,11 +130,7 @@ impl BugCache {
         {
             Ok(rows) => rows,
             Err(e) => {
-                log::warn!(
-                    "UDD bug query for binary {} failed: {}",
-                    binary_package,
-                    e
-                );
+                log::warn!("UDD bug query for binary {} failed: {}", binary_package, e);
                 return;
             }
         };
@@ -157,8 +153,7 @@ impl BugCache {
                 });
         }
 
-        self.bug_ids_by_key
-            .insert(binary_package.to_string(), ids);
+        self.bug_ids_by_key.insert(binary_package.to_string(), ids);
     }
 
     /// Fetch a single bug by ID from UDD.
@@ -298,7 +293,11 @@ mod tests {
         BugCache::new(pool)
     }
 
-    fn insert_test_bugs(cache: &mut BugCache, source_package: &str, bugs: Vec<(u32, Option<&str>)>) {
+    fn insert_test_bugs(
+        cache: &mut BugCache,
+        source_package: &str,
+        bugs: Vec<(u32, Option<&str>)>,
+    ) {
         let mut ids = Vec::new();
         for (id, title) in bugs {
             ids.push(id);

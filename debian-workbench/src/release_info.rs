@@ -232,9 +232,7 @@ pub fn get_suite_mapping(distribution: &str, date: Option<NaiveDate>) -> Option<
         "unstable" => Some("sid".to_string()),
         "sid" => Some("unstable".to_string()),
         "experimental" | "UNRELEASED" => None,
-        "testing" | "stable" | "oldstable" => {
-            resolve_release_codename(distribution, Some(date))
-        }
+        "testing" | "stable" | "oldstable" => resolve_release_codename(distribution, Some(date)),
         codename => {
             // Check if this codename currently maps to an alias
             let Ok(debian_info) = distro_info::DebianDistroInfo::new() else {

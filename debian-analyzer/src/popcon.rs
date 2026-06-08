@@ -99,9 +99,7 @@ mod tests {
     #[tokio::test]
     async fn test_get_inst_count_cached() {
         let mut cache = make_cache();
-        cache
-            .inst_by_package
-            .insert("hello".into(), Some(42000));
+        cache.inst_by_package.insert("hello".into(), Some(42000));
 
         let count = cache.get_inst_count("hello").await;
         assert_eq!(count, Some(42000));
