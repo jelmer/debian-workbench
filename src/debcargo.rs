@@ -99,7 +99,11 @@ impl DebcargoEditor {
 
     /// Commit changes to the debcargo.toml file.
     pub fn commit(&self) -> std::io::Result<bool> {
-        let old_contents = std::fs::read_to_string(self.debcargo_toml_path.as_ref().unwrap())?;
+        let old_contents = std::fs::read_to_string(
+            self.debcargo_toml_path
+                .as_ref()
+                .expect("debcargo_toml_path should be set"),
+        )?;
         let new_contents = self.debcargo.to_string();
         if old_contents == new_contents {
             return Ok(false);
