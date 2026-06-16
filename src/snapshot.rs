@@ -3,6 +3,7 @@ use debversion::Version;
 use sha1::Digest;
 use std::collections::HashMap;
 use std::fs::File;
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 #[derive(Debug, Clone, serde::Deserialize, serde::Serialize)]
@@ -138,7 +139,14 @@ pub fn download_snapshot(
         if local_path.exists() {
             let mut f = File::open(&local_path).unwrap();
             let mut actual_hsh = sha1::Sha1::new();
-            std::io::copy(&mut f, &mut actual_hsh).unwrap();
+            let mut buf = [0u8; 8192];
+            loop {
+                let n = f.read(&mut buf).unwrap();
+                if n == 0 {
+                    break;
+                }
+                actual_hsh.update(&buf[..n]);
+            }
             let actual_hsh = hex::encode(actual_hsh.finalize());
             if actual_hsh != *hsh {
                 return Err(Error::SnapshotHashMismatch {
