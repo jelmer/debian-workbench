@@ -38,7 +38,7 @@ pub fn get_debhelper_compat_level_from_control(control: &debian_control::Control
     let rels = build_depends
         .entries()
         .flat_map(|entry| entry.relations().collect::<Vec<_>>())
-        .find(|r| r.name() == "debhelper-compat");
+        .find(|r| r.try_name().as_deref() == Some("debhelper-compat"));
 
     rels.and_then(|r| r.version().and_then(|v| v.1.to_string().parse().ok()))
 }
@@ -188,7 +188,10 @@ pub fn ensure_minimum_debhelper_version(
 
         for entry in rels.entries() {
             for rel in entry.relations() {
-                if rel.name() == "debhelper-compat" || rel.name() == "debhelper" {
+                let name = rel.try_name();
+                if name.as_deref() == Some("debhelper-compat")
+                    || name.as_deref() == Some("debhelper")
+                {
                     return Err(EnsureDebhelperError::DebhelperInWrongField(
                         field_name.to_string(),
                     ));
@@ -203,7 +206,7 @@ pub fn ensure_minimum_debhelper_version(
     for entry in rels.entries() {
         let has_debhelper_compat = entry
             .relations()
-            .any(|rel| rel.name() == "debhelper-compat");
+            .any(|rel| rel.try_name().as_deref() == Some("debhelper-compat"));
 
         if !has_debhelper_compat {
             continue;
@@ -264,12 +267,8 @@ pub fn get_sequences(source: &debian_control::lossless::Source) -> impl Iterator
         .entries()
         .flat_map(|entry| entry.relations().collect::<Vec<_>>())
         .filter_map(|rel| {
-            let name = rel.name();
-            if name.starts_with("dh-sequence-") {
-                Some(name[12..].to_string())
-            } else {
-                None
-            }
+            let name = rel.try_name()?;
+            name.strip_prefix("dh-sequence-").map(|s| s.to_string())
         })
         .collect::<Vec<_>>()
         .into_iter()

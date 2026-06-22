@@ -502,15 +502,19 @@ pub fn guess_template_type(
             let build_depends = control.source().and_then(|s| s.build_depends());
 
             if build_depends.iter().any(|d| {
-                d.entries()
-                    .any(|e| e.relations().any(|r| r.name() == "gnome-pkg-tools"))
+                d.entries().any(|e| {
+                    e.relations()
+                        .any(|r| r.try_name().as_deref() == Some("gnome-pkg-tools"))
+                })
             }) {
                 return Some(TemplateType::Gnome);
             }
 
             if build_depends.iter().any(|d| {
-                d.entries()
-                    .any(|e| e.relations().any(|r| r.name() == "cdbs"))
+                d.entries().any(|e| {
+                    e.relations()
+                        .any(|r| r.try_name().as_deref() == Some("cdbs"))
+                })
             }) {
                 return Some(TemplateType::Cdbs);
             }
