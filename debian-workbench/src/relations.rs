@@ -7,8 +7,9 @@ use debversion::Version;
 ///
 /// Is dep implied by outer?
 pub fn is_dep_implied(dep: &Relation, outer: &Relation) -> bool {
-    if dep.name() != outer.name() {
-        return false;
+    match (dep.try_name(), outer.try_name()) {
+        (Some(d), Some(o)) if d == o => {}
+        _ => return false,
     }
 
     let (v1, v2) = match (dep.version(), outer.version()) {
@@ -144,7 +145,7 @@ pub fn ensure_minimum_version(
 ) -> bool {
     let is_obsolete = |entry: &Entry| -> bool {
         for r in entry.relations() {
-            if r.name() != package {
+            if r.try_name().as_deref() != Some(package) {
                 continue;
             }
             if let Some((vc, v)) = r.version().as_ref() {
@@ -166,7 +167,7 @@ pub fn ensure_minimum_version(
     for (i, entry) in relations.entries().enumerate() {
         let names = entry
             .relations()
-            .map(|r| r.name().to_string())
+            .filter_map(|r| r.try_name())
             .collect::<Vec<_>>();
         if names.len() > 1 && names.contains(&package.to_string()) && is_obsolete(&entry) {
             obsolete_relations.push(i);
@@ -246,7 +247,7 @@ pub fn ensure_exact_version(
     for (i, entry) in relations.entries().enumerate() {
         let names = entry
             .relations()
-            .map(|r| r.name().to_string())
+            .filter_map(|r| r.try_name())
             .collect::<Vec<_>>();
         if names != [package] {
             continue;
@@ -306,7 +307,7 @@ pub fn ensure_some_version(relations: &mut Relations, package: &str) -> bool {
     for entry in relations.entries() {
         let names = entry
             .relations()
-            .map(|r| r.name().to_string())
+            .filter_map(|r| r.try_name())
             .collect::<Vec<_>>();
         if names == [package] {
             return false;

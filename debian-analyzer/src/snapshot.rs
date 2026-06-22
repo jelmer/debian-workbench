@@ -136,10 +136,8 @@ pub fn download_snapshot(
     for (filename, hsh) in files.iter() {
         let local_path = output_dir.join(filename);
         if local_path.exists() {
-            let mut f = File::open(&local_path).unwrap();
-            let mut actual_hsh = sha1::Sha1::new();
-            std::io::copy(&mut f, &mut actual_hsh).unwrap();
-            let actual_hsh = hex::encode(actual_hsh.finalize());
+            let data = std::fs::read(&local_path).unwrap();
+            let actual_hsh = hex::encode(sha1::Sha1::digest(&data));
             if actual_hsh != *hsh {
                 return Err(Error::SnapshotHashMismatch {
                     filename: filename.clone(),
