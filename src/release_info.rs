@@ -138,6 +138,11 @@ pub fn resolve_release_codename(name: &str, date: Option<NaiveDate>) -> Option<S
         if name == "unstable" {
             name = "sid";
         }
+        // experimental is a perpetual Debian suite and is no longer a row in
+        // distro-info-data's debian.csv (dropped after 2026.07).
+        if name == "experimental" {
+            return Some("experimental".to_string());
+        }
         if name == "testing" {
             let mut all_unreleased = debian
                 .all_at(date)
