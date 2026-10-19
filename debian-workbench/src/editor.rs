@@ -1452,4 +1452,22 @@ Multi-Arch: foreign
             std::fs::read_to_string(td.path().join("a")).unwrap()
         );
     }
+
+    #[test]
+    fn test_edit_changelog_not_utf8() {
+        let td = tempfile::tempdir().unwrap();
+        let path = td.path().join("changelog");
+        std::fs::write(&path, b"foo (1.0) unstable; urgency=low\n\n  * Fix \xe9.\n").unwrap();
+        match FsEditor::<debian_changelog::ChangeLog>::new(&path, false, false) {
+            Err(EditorError::IoError(e)) => assert_eq!(
+                (e.kind(), e.to_string()),
+                (
+                    std::io::ErrorKind::InvalidData,
+                    "stream did not contain valid UTF-8".to_string()
+                )
+            ),
+            Err(e) => panic!("expected an I/O error, got {}", e),
+            Ok(_) => panic!("expected an error"),
+        }
+    }
 }
