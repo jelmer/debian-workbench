@@ -477,6 +477,14 @@ pub trait Marshallable {
     /// Parse the contents of a file
     fn from_bytes(content: &[u8]) -> Self;
 
+    /// Parse the contents of a file, returning an error if they can not be read
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError>
+    where
+        Self: Sized,
+    {
+        Ok(Self::from_bytes(content))
+    }
+
     /// Create an empty instance
     fn empty() -> Self;
 
@@ -582,7 +590,7 @@ impl<'a, P: Marshallable> TreeEditor<'a, P> {
             Err(e) => return Err(e.into()),
         };
         self.parsed = match self.orig_content.as_deref() {
-            Some(content) => Some(P::from_bytes(content)),
+            Some(content) => Some(P::try_from_bytes(content)?),
             None => Some(P::empty()),
         };
         self.rewritten_content = self.parsed.as_ref().unwrap().to_bytes();
@@ -698,7 +706,7 @@ impl<P: Marshallable> FsEditor<P> {
             Err(e) => return Err(e.into()),
         };
         self.parsed = match self.orig_content.as_deref() {
-            Some(content) => Some(P::from_bytes(content)),
+            Some(content) => Some(P::try_from_bytes(content)?),
             None => Some(P::empty()),
         };
         self.rewritten_content = self.parsed.as_ref().unwrap().to_bytes();
@@ -764,11 +772,26 @@ impl<P: Marshallable> Editor<P> for FsEditor<P> {
     }
 }
 
+fn invalid_data(e: impl std::fmt::Display) -> EditorError {
+    EditorError::IoError(std::io::Error::new(
+        std::io::ErrorKind::InvalidData,
+        e.to_string(),
+    ))
+}
+
+fn utf8(content: &[u8]) -> Result<&str, EditorError> {
+    std::str::from_utf8(content).map_err(invalid_data)
+}
+
 impl Marshallable for debian_control::Control {
     fn from_bytes(content: &[u8]) -> Self {
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
         debian_control::Control::read_relaxed(std::io::Cursor::new(content))
-            .unwrap()
-            .0
+            .map(|(control, _)| control)
+            .map_err(invalid_data)
     }
 
     fn empty() -> Self {
@@ -783,8 +806,12 @@ impl Marshallable for debian_control::Control {
 
 impl Marshallable for debian_control::lossy::Control {
     fn from_bytes(content: &[u8]) -> Self {
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
         use std::str::FromStr;
-        debian_control::lossy::Control::from_str(std::str::from_utf8(content).unwrap()).unwrap()
+        debian_control::lossy::Control::from_str(utf8(content)?).map_err(invalid_data)
     }
 
     fn empty() -> Self {
@@ -798,7 +825,16 @@ impl Marshallable for debian_control::lossy::Control {
 
 impl Marshallable for debian_changelog::ChangeLog {
     fn from_bytes(content: &[u8]) -> Self {
-        debian_changelog::ChangeLog::read_relaxed(std::io::Cursor::new(content)).unwrap()
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
+        debian_changelog::ChangeLog::read_relaxed(std::io::Cursor::new(content)).map_err(
+            |e| match e {
+                debian_changelog::Error::Io(e) => EditorError::IoError(e),
+                e => invalid_data(e),
+            },
+        )
     }
 
     fn empty() -> Self {
@@ -812,11 +848,13 @@ impl Marshallable for debian_changelog::ChangeLog {
 
 impl Marshallable for debian_copyright::lossless::Copyright {
     fn from_bytes(content: &[u8]) -> Self {
-        debian_copyright::lossless::Copyright::from_str_relaxed(
-            std::str::from_utf8(content).unwrap(),
-        )
-        .unwrap()
-        .0
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
+        debian_copyright::lossless::Copyright::from_str_relaxed(utf8(content)?)
+            .map(|(copyright, _)| copyright)
+            .map_err(invalid_data)
     }
 
     fn empty() -> Self {
@@ -830,7 +868,12 @@ impl Marshallable for debian_copyright::lossless::Copyright {
 
 impl Marshallable for makefile_lossless::Makefile {
     fn from_bytes(content: &[u8]) -> Self {
-        makefile_lossless::Makefile::read_relaxed(std::io::Cursor::new(content)).unwrap()
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
+        makefile_lossless::Makefile::read_relaxed(std::io::Cursor::new(content))
+            .map_err(invalid_data)
     }
 
     fn empty() -> Self {
@@ -844,9 +887,13 @@ impl Marshallable for makefile_lossless::Makefile {
 
 impl Marshallable for deb822_lossless::Deb822 {
     fn from_bytes(content: &[u8]) -> Self {
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
         deb822_lossless::Deb822::read_relaxed(std::io::Cursor::new(content))
-            .unwrap()
-            .0
+            .map(|(deb822, _)| deb822)
+            .map_err(invalid_data)
     }
 
     fn empty() -> Self {
@@ -860,9 +907,12 @@ impl Marshallable for deb822_lossless::Deb822 {
 
 impl Marshallable for crate::maintscripts::Maintscript {
     fn from_bytes(content: &[u8]) -> Self {
+        Self::try_from_bytes(content).unwrap()
+    }
+
+    fn try_from_bytes(content: &[u8]) -> Result<Self, EditorError> {
         use std::str::FromStr;
-        let content = std::str::from_utf8(content).unwrap();
-        crate::maintscripts::Maintscript::from_str(content).unwrap()
+        crate::maintscripts::Maintscript::from_str(utf8(content)?).map_err(invalid_data)
     }
 
     fn empty() -> Self {
