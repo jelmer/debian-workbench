@@ -95,7 +95,7 @@ where
             reset_tree_with_dirty_tracker(
                 local_tree,
                 Some(basis_tree),
-                Some(subpath),
+                subpath.to_str().expect("subpath is not valid UTF-8"),
                 dirty_tracker,
             )
             .unwrap();
