@@ -473,7 +473,10 @@ where
     let mut diff = Vec::new();
     breezyshim::diff::show_diff_trees(basis_tree, local_tree, &mut diff, None, None)
         .map_err(|e| format!("Failed to generate diff: {}", e))?;
-    reset_tree_with_dirty_tracker(local_tree, Some(basis_tree), Some(subpath), dirty_tracker)
+    let subpath_str = subpath
+        .to_str()
+        .ok_or_else(|| format!("Subpath {} is not valid UTF-8", subpath.display()))?;
+    reset_tree_with_dirty_tracker(local_tree, Some(basis_tree), subpath_str, dirty_tracker)
         .map_err(|e| format!("Failed to reset tree: {}", e))?;
     // See https://dep-team.pages.debian.net/deps/dep3/ for fields.
     let mut dep3_header = dep3::lossless::PatchHeader::new();
